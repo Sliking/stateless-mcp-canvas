@@ -653,7 +653,7 @@
           x,
           y,
           color,
-          artist: nickname,
+          nickname,
         });
 
         if (response.result && response.result.content) {
@@ -690,10 +690,11 @@
               try {
                 const data = JSON.parse(item.text);
 
-                // Update pixels
-                if (data.pixels && Array.isArray(data.pixels)) {
+                // Update pixels (server returns data.canvas.pixels)
+                const pixels = data.canvas?.pixels || data.pixels;
+                if (pixels && Array.isArray(pixels)) {
                   state.pixels.clear();
-                  for (const pixel of data.pixels) {
+                  for (const pixel of pixels) {
                     const key = `${pixel.x},${pixel.y}`;
                     state.pixels.set(key, pixel);
                     if (pixel.isolate_id) {
@@ -703,15 +704,16 @@
                   drawCanvas();
                 }
 
-                // Update stats
-                if (typeof data.total_pixels === 'number') {
-                  state.stats.totalPixels = data.total_pixels;
+                // Update stats (server returns data.metadata.*)
+                const meta = data.metadata || data;
+                if (typeof meta.total_pixels === 'number') {
+                  state.stats.totalPixels = meta.total_pixels;
                 }
-                if (typeof data.unique_artists === 'number') {
-                  state.stats.uniqueArtists = data.unique_artists;
+                if (typeof meta.unique_artists === 'number') {
+                  state.stats.uniqueArtists = meta.unique_artists;
                 }
-                if (typeof data.unique_isolates === 'number') {
-                  state.stats.uniqueIsolates = data.unique_isolates;
+                if (typeof meta.unique_isolates === 'number') {
+                  state.stats.uniqueIsolates = meta.unique_isolates;
                 }
 
                 // Track isolate
