@@ -1,0 +1,17 @@
+{
+  "name": "stateless-mcp-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Stateless MCP demo on Cloudflare Workers (SEP-1442, SEP-2322, SEP-2243)",
+  "scripts": {
+    "dev:server": "npm run dev --workspace=packages/mcp-server",
+    "dev:frontend": "npm run dev --workspace=packages/frontend",
+    "deploy:server": "npm run deploy --workspace=packages/mcp-server",
+    "deploy:frontend": "npm run deploy --workspace=packages/frontend",
+    "install:all": "npm install --workspaces"
+  },
+  "workspaces": [
+    "packages/mcp-server",
+    "packages/frontend"
+  ]
+}

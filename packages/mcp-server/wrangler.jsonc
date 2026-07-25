@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stateless-mcp-demo-server",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-12-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // No Durable Objects - this is a truly stateless MCP server.
+  // Every request is self-contained, handled by any Worker isolate.
+  // No sessions, no sticky routing, no state coordination.
+  // This is the point of SEP-1442: stateless MCP by default.
+
+  "observability": {
+    "enabled": true
+  }
+}

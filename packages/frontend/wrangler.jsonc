@@ -1,0 +1,8 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stateless-mcp-demo-ui",
+  "compatibility_date": "2025-12-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}

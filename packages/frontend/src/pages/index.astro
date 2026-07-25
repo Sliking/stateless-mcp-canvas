@@ -1,0 +1,1119 @@
+---
+// Stateless MCP Demo - Mobile-first UI
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0d1117">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <title>Stateless MCP Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --accent: #f6821f;
+      --accent-glow: rgba(246, 130, 31, 0.3);
+      --text: #e6edf3;
+      --text-secondary: #8b949e;
+      --success: #3fb950;
+      --border: #30363d;
+      --error: #f85149;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Header */
+    .header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-title h1 {
+      font-size: 18px;
+      font-weight: 600;
+      background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .accent-bar {
+      width: 4px;
+      height: 24px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--text-secondary);
+      transition: all 0.3s ease;
+    }
+
+    .status-dot.connected {
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+    }
+
+    .status-dot.connecting {
+      background: var(--accent);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.2); }
+    }
+
+    /* Connection Panel */
+    .connection-panel {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .url-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .url-input:focus {
+      border-color: var(--accent);
+    }
+
+    .connect-btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .connect-btn:hover {
+      background: #ff9a47;
+      transform: translateY(-1px);
+    }
+
+    .connect-btn:active {
+      transform: translateY(0);
+    }
+
+    .connect-btn:disabled {
+      background: var(--border);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .connect-btn.disconnect {
+      background: var(--error);
+    }
+
+    /* Main Content */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Section Headers */
+    .section-header {
+      padding: 12px 16px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+
+    /* Tools Panel */
+    .tools-panel {
+      padding: 0 16px 16px;
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      flex-shrink: 0;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .tools-panel::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tool-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      min-width: 160px;
+      max-width: 200px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .tool-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .tool-card:active {
+      transform: translateY(0);
+    }
+
+    .tool-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--accent) 0%, #ff9a47 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+      font-size: 20px;
+    }
+
+    .tool-name {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tool-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .tools-empty {
+      color: var(--text-secondary);
+      font-size: 14px;
+      padding: 20px 0;
+      text-align: center;
+      width: 100%;
+    }
+
+    /* Results Panel */
+    .results-panel {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 16px 16px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .result-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .result-tool-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .result-timestamp {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .result-instance {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .instance-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .result-content {
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .result-error {
+      color: var(--error);
+    }
+
+    .results-empty {
+      color: var(--text-secondary);
+      font-size: 14px;
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal {
+      background: var(--card-bg);
+      border-radius: 20px 20px 0 0;
+      width: 100%;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+    }
+
+    .modal-overlay.active .modal {
+      transform: translateY(0);
+    }
+
+    .modal-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      background: var(--card-bg);
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      background: var(--bg);
+      border: none;
+      border-radius: 50%;
+      color: var(--text);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-body {
+      padding: 20px;
+    }
+
+    .modal-desc {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    .input-group {
+      margin-bottom: 16px;
+    }
+
+    .input-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .input-required {
+      color: var(--error);
+      margin-left: 4px;
+    }
+
+    .input-field {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .input-field:focus {
+      border-color: var(--accent);
+    }
+
+    .input-hint {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .modal-actions {
+      padding: 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn-cancel {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-run {
+      flex: 2;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      padding: 14px;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-run:hover {
+      background: #ff9a47;
+    }
+
+    .btn-run:disabled {
+      background: var(--border);
+      cursor: not-allowed;
+    }
+
+    /* Instance color palette */
+    .instance-color-0 { background: rgba(246, 130, 31, 0.2); color: #f6821f; }
+    .instance-color-0 .instance-dot { background: #f6821f; }
+    .instance-color-1 { background: rgba(63, 185, 80, 0.2); color: #3fb950; }
+    .instance-color-1 .instance-dot { background: #3fb950; }
+    .instance-color-2 { background: rgba(136, 132, 216, 0.2); color: #8884d8; }
+    .instance-color-2 .instance-dot { background: #8884d8; }
+    .instance-color-3 { background: rgba(130, 202, 157, 0.2); color: #82ca9d; }
+    .instance-color-3 .instance-dot { background: #82ca9d; }
+    .instance-color-4 { background: rgba(255, 198, 88, 0.2); color: #ffc658; }
+    .instance-color-4 .instance-dot { background: #ffc658; }
+    .instance-color-5 { background: rgba(255, 128, 128, 0.2); color: #ff8080; }
+    .instance-color-5 .instance-dot { background: #ff8080; }
+    .instance-color-6 { background: rgba(128, 200, 255, 0.2); color: #80c8ff; }
+    .instance-color-6 .instance-dot { background: #80c8ff; }
+    .instance-color-7 { background: rgba(200, 128, 255, 0.2); color: #c880ff; }
+    .instance-color-7 .instance-dot { background: #c880ff; }
+
+    /* Responsive adjustments */
+    @media (min-width: 768px) {
+      .header-title h1 {
+        font-size: 22px;
+      }
+
+      .tools-panel {
+        flex-wrap: wrap;
+        overflow-x: visible;
+      }
+
+      .tool-card {
+        min-width: 180px;
+      }
+
+      .modal {
+        border-radius: 20px;
+        margin: auto;
+        max-height: 70vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-title">
+      <div class="accent-bar"></div>
+      <h1>Stateless MCP</h1>
+    </div>
+    <div class="status-indicator">
+      <div id="status-dot" class="status-dot"></div>
+      <span id="status-text">Disconnected</span>
+    </div>
+  </header>
+
+  <!-- Connection Panel -->
+  <div class="connection-panel">
+    <input
+      type="url"
+      id="server-url"
+      class="url-input"
+      placeholder="MCP Server URL"
+      value="http://localhost:8787/mcp"
+    />
+    <button id="connect-btn" class="connect-btn">Connect</button>
+  </div>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Tools Section -->
+    <div class="section-header">Available Tools</div>
+    <div id="tools-panel" class="tools-panel">
+      <div class="tools-empty">Connect to a stateless MCP server to discover tools (no handshake needed)</div>
+    </div>
+
+    <!-- Results Section -->
+    <div class="section-header">Results</div>
+    <div id="results-panel" class="results-panel">
+      <div class="results-empty">Tool call results will appear here</div>
+    </div>
+  </main>
+
+  <!-- Modal for Tool Input -->
+  <div id="modal-overlay" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modal-title" class="modal-title">Tool Name</h2>
+        <button id="modal-close" class="modal-close">×</button>
+      </div>
+      <div class="modal-body">
+        <p id="modal-desc" class="modal-desc">Tool description</p>
+        <div id="modal-inputs"></div>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-cancel" class="btn-cancel">Cancel</button>
+        <button id="btn-run" class="btn-run">Run Tool</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // MCP Client State
+    const state = {
+      connected: false,
+      connecting: false,
+      serverUrl: '',
+      sessionId: null,
+      tools: [],
+      results: [],
+      instanceColors: new Map(),
+      nextColorIndex: 0,
+      messageId: 0
+    };
+
+    // DOM Elements
+    const elements = {
+      statusDot: document.getElementById('status-dot'),
+      statusText: document.getElementById('status-text'),
+      serverUrl: document.getElementById('server-url'),
+      connectBtn: document.getElementById('connect-btn'),
+      toolsPanel: document.getElementById('tools-panel'),
+      resultsPanel: document.getElementById('results-panel'),
+      modalOverlay: document.getElementById('modal-overlay'),
+      modalTitle: document.getElementById('modal-title'),
+      modalDesc: document.getElementById('modal-desc'),
+      modalInputs: document.getElementById('modal-inputs'),
+      modalClose: document.getElementById('modal-close'),
+      btnCancel: document.getElementById('btn-cancel'),
+      btnRun: document.getElementById('btn-run')
+    };
+
+    // Tool icons based on name patterns
+    function getToolIcon(name) {
+      const lower = name.toLowerCase();
+      if (lower.includes('server_info') || lower.includes('server')) return '🖥️';
+      if (lower.includes('website') || lower.includes('status') || lower.includes('check')) return '🌐';
+      if (lower.includes('dns')) return '🔍';
+      if (lower.includes('qr')) return '📱';
+      if (lower.includes('proof') || lower.includes('stateless')) return '🔬';
+      if (lower.includes('latency') || lower.includes('network')) return '📡';
+      return '⚡';
+    }
+
+    // Get color class for an instance ID
+    function getInstanceColorClass(instanceId) {
+      if (!state.instanceColors.has(instanceId)) {
+        state.instanceColors.set(instanceId, state.nextColorIndex % 8);
+        state.nextColorIndex++;
+      }
+      return `instance-color-${state.instanceColors.get(instanceId)}`;
+    }
+
+    // Update connection status UI
+    function updateStatus(status, text) {
+      elements.statusDot.className = 'status-dot ' + status;
+      elements.statusText.textContent = text;
+      
+      if (status === 'connected') {
+        elements.connectBtn.textContent = 'Disconnect';
+        elements.connectBtn.classList.add('disconnect');
+        elements.connectBtn.disabled = false;
+      } else if (status === 'connecting') {
+        elements.connectBtn.textContent = 'Connecting...';
+        elements.connectBtn.disabled = true;
+      } else {
+        elements.connectBtn.textContent = 'Connect';
+        elements.connectBtn.classList.remove('disconnect');
+        elements.connectBtn.disabled = false;
+      }
+    }
+
+    // Parse SSE response
+    function parseSSEResponse(text) {
+      const lines = text.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            return JSON.parse(line.slice(6));
+          } catch (e) {
+            console.error('Failed to parse SSE data:', e);
+          }
+        }
+      }
+      return null;
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // Stateless MCP Client (MCP 2026-07-28 / SEP-1442)
+    //
+    // Key difference from v1: NO initialization handshake.
+    // Every request is self-contained. Protocol version and
+    // client info travel in _meta on EACH request.
+    // No session ID. No state between requests.
+    // ──────────────────────────────────────────────────────────
+
+    const PROTOCOL_VERSION = '2026-07-28';
+    const CLIENT_INFO = { name: 'stateless-mcp-demo-ui', version: '1.0.0' };
+
+    // Build the _meta envelope for stateless requests (SEP-1442)
+    function buildMeta() {
+      return {
+        'modelcontextprotocol.io/mcpProtocolVersion': PROTOCOL_VERSION,
+        'modelcontextprotocol.io/clientInfo': CLIENT_INFO,
+      };
+    }
+
+    // Send a stateless JSON-RPC request
+    // Each request carries its own protocol version - no prior handshake needed
+    async function sendRequest(method, params = {}) {
+      const id = ++state.messageId;
+
+      // Inject _meta into params for stateless protocol (SEP-1442)
+      const enrichedParams = {
+        ...params,
+        _meta: {
+          ...(params._meta || {}),
+          ...buildMeta(),
+        },
+      };
+
+      const request = {
+        jsonrpc: '2.0',
+        id,
+        method,
+        params: enrichedParams,
+      };
+
+      // SEP-2243: Mcp-Method and Mcp-Name in HTTP headers
+      const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream',
+        'MCP-Protocol-Version': PROTOCOL_VERSION,
+        'Mcp-Method': method,
+      };
+
+      // For tool calls, also add Mcp-Name (SEP-2243)
+      if (method === 'tools/call' && params.name) {
+        headers['Mcp-Name'] = params.name;
+      }
+
+      const response = await fetch(state.serverUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(request),
+      });
+
+      const contentType = response.headers.get('Content-Type') || '';
+      const text = await response.text();
+
+      if (contentType.includes('text/event-stream')) {
+        return parseSSEResponse(text);
+      } else {
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          console.error('Failed to parse response:', text);
+          throw new Error('Invalid response from server');
+        }
+      }
+    }
+
+    // Connect to MCP server - STATELESS: no init handshake!
+    // We just call tools/list directly. That's the whole point of SEP-1442.
+    async function connect() {
+      state.serverUrl = elements.serverUrl.value.trim();
+      if (!state.serverUrl) {
+        alert('Please enter a server URL');
+        return;
+      }
+
+      state.connecting = true;
+      updateStatus('connecting', 'Connecting...');
+
+      try {
+        // ── NO initialize handshake ──
+        // In stateless MCP (2026-07-28), we skip the init ceremony.
+        // We can optionally call server/discover, or just go straight
+        // to tools/list. The protocol version travels in _meta.
+
+        // Try stateless tools/list first (v2 protocol)
+        let toolsResponse = await sendRequest('tools/list', {});
+
+        // If server returns unsupported-version error, fall back to v1 handshake
+        if (toolsResponse.error && toolsResponse.error.code === -32000) {
+          console.log('Server requires v1 protocol, falling back to init handshake...');
+          state.protocolVersion = '2025-03-26';
+
+          // v1 init handshake
+          const initReq = {
+            jsonrpc: '2.0',
+            id: ++state.messageId,
+            method: 'initialize',
+            params: {
+              protocolVersion: '2025-03-26',
+              capabilities: {},
+              clientInfo: CLIENT_INFO,
+            },
+          };
+          const initRes = await fetch(state.serverUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' },
+            body: JSON.stringify(initReq),
+          });
+          const initData = await initRes.text();
+          const initParsed = initData.includes('data: ') ? parseSSEResponse(initData) : JSON.parse(initData);
+          if (initParsed?.error) throw new Error(initParsed.error.message);
+
+          // Capture session ID if v1 server provides one
+          const sid = initRes.headers.get('Mcp-Session-Id');
+          if (sid) state.sessionId = sid;
+
+          // Send initialized notification
+          const notif = { jsonrpc: '2.0', method: 'notifications/initialized' };
+          const notifHeaders = { 'Content-Type': 'application/json' };
+          if (state.sessionId) notifHeaders['Mcp-Session-Id'] = state.sessionId;
+          await fetch(state.serverUrl, { method: 'POST', headers: notifHeaders, body: JSON.stringify(notif) });
+
+          // Now list tools (v1 style)
+          const listReq = { jsonrpc: '2.0', id: ++state.messageId, method: 'tools/list', params: {} };
+          const listHeaders = { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' };
+          if (state.sessionId) listHeaders['Mcp-Session-Id'] = state.sessionId;
+          const listRes = await fetch(state.serverUrl, { method: 'POST', headers: listHeaders, body: JSON.stringify(listReq) });
+          const listData = await listRes.text();
+          toolsResponse = listData.includes('data: ') ? parseSSEResponse(listData) : JSON.parse(listData);
+        }
+        
+        if (toolsResponse.error) {
+          throw new Error(toolsResponse.error.message || 'Failed to list tools');
+        }
+
+        state.tools = toolsResponse.result?.tools || [];
+        state.connected = true;
+        state.connecting = false;
+
+        updateStatus('connected', `Connected (${state.protocolVersion || PROTOCOL_VERSION})`);
+        renderTools();
+
+      } catch (error) {
+        console.error('Connection failed:', error);
+        state.connecting = false;
+        state.connected = false;
+        updateStatus('', 'Disconnected');
+        alert('Connection failed: ' + error.message);
+      }
+    }
+
+    // Disconnect
+    function disconnect() {
+      state.connected = false;
+      state.sessionId = null;
+      state.tools = [];
+      updateStatus('', 'Disconnected');
+      renderTools();
+    }
+
+    // Render tools in the UI
+    function renderTools() {
+      if (state.tools.length === 0) {
+        elements.toolsPanel.innerHTML = `
+          <div class="tools-empty">
+            ${state.connected ? 'No tools available on this server' : 'Connect to a stateless MCP server (no handshake needed)'}
+          </div>
+        `;
+        return;
+      }
+
+      elements.toolsPanel.innerHTML = state.tools.map((tool, index) => `
+        <div class="tool-card" data-index="${index}">
+          <div class="tool-icon">${getToolIcon(tool.name)}</div>
+          <div class="tool-name">${tool.name}</div>
+          <div class="tool-desc">${tool.description || 'No description'}</div>
+        </div>
+      `).join('');
+
+      // Add click handlers
+      elements.toolsPanel.querySelectorAll('.tool-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const index = parseInt(card.dataset.index);
+          openToolModal(state.tools[index]);
+        });
+      });
+    }
+
+    // Current tool being edited in modal
+    let currentTool = null;
+
+    // Open tool modal
+    function openToolModal(tool) {
+      currentTool = tool;
+      elements.modalTitle.textContent = tool.name;
+      elements.modalDesc.textContent = tool.description || 'No description provided';
+
+      // Build input fields from schema
+      const schema = tool.inputSchema || {};
+      const properties = schema.properties || {};
+      const required = schema.required || [];
+
+      if (Object.keys(properties).length === 0) {
+        elements.modalInputs.innerHTML = `
+          <p style="color: var(--text-secondary); font-size: 14px;">
+            This tool doesn't require any input parameters.
+          </p>
+        `;
+      } else {
+        elements.modalInputs.innerHTML = Object.entries(properties).map(([name, prop]) => {
+          const isRequired = required.includes(name);
+          const type = prop.type || 'string';
+          let inputType = 'text';
+          if (type === 'number' || type === 'integer') inputType = 'number';
+          if (type === 'boolean') inputType = 'checkbox';
+
+          return `
+            <div class="input-group">
+              <label class="input-label">
+                ${name}
+                ${isRequired ? '<span class="input-required">*</span>' : ''}
+              </label>
+              ${type === 'boolean' 
+                ? `<input type="checkbox" class="input-field" data-param="${name}" data-type="${type}" style="width: auto; margin-right: auto;">`
+                : `<input type="${inputType}" class="input-field" data-param="${name}" data-type="${type}" placeholder="${prop.description || ''}">`
+              }
+              ${prop.description ? `<div class="input-hint">${prop.description}</div>` : ''}
+            </div>
+          `;
+        }).join('');
+      }
+
+      elements.modalOverlay.classList.add('active');
+    }
+
+    // Close modal
+    function closeModal() {
+      elements.modalOverlay.classList.remove('active');
+      currentTool = null;
+    }
+
+    // Run the current tool
+    async function runTool() {
+      if (!currentTool) return;
+
+      // Collect arguments
+      const args = {};
+      elements.modalInputs.querySelectorAll('.input-field').forEach(input => {
+        const param = input.dataset.param;
+        const type = input.dataset.type;
+        let value = input.type === 'checkbox' ? input.checked : input.value;
+
+        if (value !== '' && value !== false) {
+          if (type === 'number' || type === 'integer') {
+            value = Number(value);
+          } else if (type === 'boolean') {
+            value = Boolean(value);
+          }
+          args[param] = value;
+        }
+      });
+
+      elements.btnRun.disabled = true;
+      elements.btnRun.textContent = 'Running...';
+
+      try {
+        const response = await sendRequest('tools/call', {
+          name: currentTool.name,
+          arguments: args
+        });
+
+        const timestamp = new Date().toLocaleTimeString();
+        
+        if (response.error) {
+          addResult({
+            toolName: currentTool.name,
+            timestamp,
+            error: response.error.message || 'Tool call failed',
+            instanceId: null
+          });
+        } else {
+          // Extract isolate ID from result to demonstrate statelessness
+          let instanceId = null;
+          let content = response.result?.content || [];
+          
+          for (const item of content) {
+            if (item.type === 'text' && item.text) {
+              try {
+                const parsed = JSON.parse(item.text);
+                // Our stateless server always includes handled_by_isolate or isolate_id
+                instanceId = parsed.handled_by_isolate || parsed.isolate_id || parsed.current_isolate || null;
+              } catch (e) {
+                // Not JSON, try regex
+                const match = item.text.match(/isolate[_\s]?id[:\s]+"?([a-f0-9-]+)/i);
+                if (match) instanceId = match[1];
+              }
+            }
+          }
+
+          addResult({
+            toolName: currentTool.name,
+            timestamp,
+            result: content,
+            instanceId,
+            isError: response.result?.isError
+          });
+        }
+
+        closeModal();
+
+      } catch (error) {
+        console.error('Tool call failed:', error);
+        addResult({
+          toolName: currentTool.name,
+          timestamp: new Date().toLocaleTimeString(),
+          error: error.message,
+          instanceId: null
+        });
+      } finally {
+        elements.btnRun.disabled = false;
+        elements.btnRun.textContent = 'Run Tool';
+      }
+    }
+
+    // Add a result to the results panel
+    function addResult(result) {
+      state.results.unshift(result);
+      renderResults();
+    }
+
+    // Render results
+    function renderResults() {
+      if (state.results.length === 0) {
+        elements.resultsPanel.innerHTML = `
+          <div class="results-empty">Tool call results will appear here</div>
+        `;
+        return;
+      }
+
+      elements.resultsPanel.innerHTML = state.results.map(result => {
+        let contentHtml = '';
+        
+        if (result.error) {
+          contentHtml = `<div class="result-content result-error">${escapeHtml(result.error)}</div>`;
+        } else if (result.result) {
+          const texts = result.result
+            .filter(item => item.type === 'text')
+            .map(item => item.text)
+            .join('\n');
+          
+          // Try to pretty print JSON
+          let displayText = texts;
+          try {
+            const parsed = JSON.parse(texts);
+            displayText = JSON.stringify(parsed, null, 2);
+          } catch (e) {
+            // Not JSON, use as is
+          }
+          
+          contentHtml = `<div class="result-content ${result.isError ? 'result-error' : ''}">${escapeHtml(displayText)}</div>`;
+        }
+
+        const instanceHtml = result.instanceId 
+          ? `<div class="result-instance ${getInstanceColorClass(result.instanceId)}">
+              <span class="instance-dot"></span>
+              Isolate: ${result.instanceId.substring(0, 8)}...
+            </div>`
+          : '';
+
+        return `
+          <div class="result-card">
+            <div class="result-header">
+              <span class="result-tool-name">${escapeHtml(result.toolName)}</span>
+              <span class="result-timestamp">${result.timestamp}</span>
+            </div>
+            ${instanceHtml}
+            ${contentHtml}
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Escape HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Event listeners
+    elements.connectBtn.addEventListener('click', () => {
+      if (state.connected) {
+        disconnect();
+      } else if (!state.connecting) {
+        connect();
+      }
+    });
+
+    elements.serverUrl.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !state.connected && !state.connecting) {
+        connect();
+      }
+    });
+
+    elements.modalClose.addEventListener('click', closeModal);
+    elements.btnCancel.addEventListener('click', closeModal);
+    elements.btnRun.addEventListener('click', runTool);
+
+    elements.modalOverlay.addEventListener('click', (e) => {
+      if (e.target === elements.modalOverlay) {
+        closeModal();
+      }
+    });
+
+    // Initialize
+    renderTools();
+    renderResults();
+  </script>
+</body>
+</html>
