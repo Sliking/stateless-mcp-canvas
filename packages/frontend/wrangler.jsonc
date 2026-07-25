@@ -4,5 +4,8 @@
   "compatibility_date": "2025-12-01",
   "assets": {
     "directory": "./dist"
-  }
+  },
+  "routes": [
+    { "pattern": "canvas.mpinto.space", "custom_domain": true }
+  ]
 }

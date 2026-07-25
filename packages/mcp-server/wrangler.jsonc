@@ -13,6 +13,10 @@
   // Canvas state lives in KV (external store), not in the server.
   // The server is stateless. The state is external.
 
+  "routes": [
+    { "pattern": "mcp.mpinto.space", "custom_domain": true }
+  ],
+
   "kv_namespaces": [
     {
       "binding": "CANVAS_KV",
