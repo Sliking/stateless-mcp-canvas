@@ -564,7 +564,7 @@
       id="server-url"
       class="url-input"
       placeholder="MCP Server URL"
-      value="http://localhost:8787/mcp"
+      value="https://stateless-mcp-demo-server.miguel-pinto-infra.workers.dev/mcp"
     />
     <button id="connect-btn" class="connect-btn">Connect</button>
   </div>
@@ -701,10 +701,12 @@
     const CLIENT_INFO = { name: 'stateless-mcp-demo-ui', version: '1.0.0' };
 
     // Build the _meta envelope for stateless requests (SEP-1442)
+    // Keys use the io.modelcontextprotocol/ namespace per the v2 SDK
     function buildMeta() {
       return {
-        'modelcontextprotocol.io/mcpProtocolVersion': PROTOCOL_VERSION,
-        'modelcontextprotocol.io/clientInfo': CLIENT_INFO,
+        'io.modelcontextprotocol/protocolVersion': PROTOCOL_VERSION,
+        'io.modelcontextprotocol/clientInfo': CLIENT_INFO,
+        'io.modelcontextprotocol/clientCapabilities': {},
       };
     }
 
@@ -784,8 +786,8 @@
         // Try stateless tools/list first (v2 protocol)
         let toolsResponse = await sendRequest('tools/list', {});
 
-        // If server returns unsupported-version error, fall back to v1 handshake
-        if (toolsResponse.error && toolsResponse.error.code === -32000) {
+        // If server returns unsupported-version error or method-not-found, fall back to v1 handshake
+        if (toolsResponse.error && (toolsResponse.error.code === -32000 || toolsResponse.error.code === -32022 || toolsResponse.error.code === -32601)) {
           console.log('Server requires v1 protocol, falling back to init handshake...');
           state.protocolVersion = '2025-03-26';
 

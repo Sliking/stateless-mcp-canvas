@@ -17,13 +17,22 @@ import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 // ──────────────────────────────────────────────────────────────────────
-// Worker isolate identity: generated ONCE when this isolate cold-starts.
+// Worker isolate identity: generated lazily on first request.
 // In a stateless world, different requests hit different isolates -
 // so the instance ID will differ across calls. That's the whole point.
+// (crypto.randomUUID() can't be called in global scope on Workers)
 // ──────────────────────────────────────────────────────────────────────
-const ISOLATE_ID = crypto.randomUUID();
-const ISOLATE_BORN = new Date().toISOString();
+let ISOLATE_ID = "";
+let ISOLATE_BORN = "";
 let requestCounter = 0;
+
+function getIsolateId(): string {
+  if (!ISOLATE_ID) {
+    ISOLATE_ID = crypto.randomUUID();
+    ISOLATE_BORN = new Date().toISOString();
+  }
+  return ISOLATE_ID;
+}
 
 // DNS types
 interface DnsAnswer {
@@ -80,7 +89,7 @@ const handler = createMcpHandler((_ctx) => {
             type: "text" as const,
             text: JSON.stringify(
               {
-                isolate_id: ISOLATE_ID,
+                isolate_id: getIsolateId(),
                 request_number: thisRequestNum,
                 isolate_born: ISOLATE_BORN,
                 uptime_seconds: Math.round(uptimeMs / 1000),
@@ -139,7 +148,7 @@ const handler = createMcpHandler((_ctx) => {
                   response_time_ms: ms,
                   on_cloudflare: !!res.headers.get("cf-ray"),
                   headers,
-                  handled_by_isolate: ISOLATE_ID,
+                  handled_by_isolate: getIsolateId(),
                 },
                 null,
                 2
@@ -156,7 +165,7 @@ const handler = createMcpHandler((_ctx) => {
                 {
                   url,
                   error: err instanceof Error ? err.message : String(err),
-                  handled_by_isolate: ISOLATE_ID,
+                  handled_by_isolate: getIsolateId(),
                 },
                 null,
                 2
@@ -207,7 +216,7 @@ const handler = createMcpHandler((_ctx) => {
                     ttl: a.TTL,
                   })),
                   resolver: "Cloudflare 1.1.1.1 (DoH)",
-                  handled_by_isolate: ISOLATE_ID,
+                  handled_by_isolate: getIsolateId(),
                 },
                 null,
                 2
@@ -263,7 +272,7 @@ const handler = createMcpHandler((_ctx) => {
                 size: `${size}x${size}`,
                 qr_url: qrUrl,
                 is_url: text.startsWith("http://") || text.startsWith("https://"),
-                handled_by_isolate: ISOLATE_ID,
+                handled_by_isolate: getIsolateId(),
               },
               null,
               2
@@ -296,7 +305,7 @@ const handler = createMcpHandler((_ctx) => {
       }),
     },
     async ({ previous_isolate_id }) => {
-      const sameIsolate = previous_isolate_id === ISOLATE_ID;
+      const sameIsolate = previous_isolate_id === getIsolateId();
 
       return {
         content: [
@@ -304,7 +313,7 @@ const handler = createMcpHandler((_ctx) => {
             type: "text" as const,
             text: JSON.stringify(
               {
-                current_isolate: ISOLATE_ID,
+                current_isolate: getIsolateId(),
                 previous_isolate: previous_isolate_id || "(none provided)",
                 same_isolate: previous_isolate_id ? sameIsolate : null,
                 explanation: previous_isolate_id
@@ -368,7 +377,7 @@ export default {
           version: "1.0.0",
           protocol: "MCP 2026-07-28 (stateless)",
           seps: ["SEP-1442", "SEP-2322", "SEP-2243"],
-          isolate_id: ISOLATE_ID,
+          isolate_id: getIsolateId(),
           mcp_endpoint: "/mcp",
           docs: "https://github.com/Sliking/stateless-mcp-demo",
         }),
