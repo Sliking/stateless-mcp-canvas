@@ -1,0 +1,19 @@
+package-lock.json
+  s_41f675809a9598::t_437d6605be7088 1-4733
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bce0735feb94fc8345408213bacc7df74942d744",
+  "prompts": {},
+  "sessions": {
+    "s_41f675809a9598": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_066726289ffeptS3MEcv1qvYol",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Miguel Pinto <mpinto@cloudflare.com>"
+    }
+  }
+}
