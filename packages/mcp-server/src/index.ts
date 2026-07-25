@@ -1,5 +1,9 @@
 /**
- * Stateless MCP Server on Cloudflare Workers
+ * Stateless MCP Pixel Art Canvas Server
+ *
+ * A collaborative 32x32 pixel art canvas where every pixel placement is a
+ * stateless MCP tool call. Canvas state lives in Cloudflare KV (external state),
+ * while the MCP server itself is fully stateless (fresh McpServer per request).
  *
  * This demonstrates the MCP 2026-07-28 stateless protocol (SEP-1442):
  * - No initialization handshake required
@@ -7,14 +11,53 @@
  * - Any Worker isolate in the pool handles any request
  * - Protocol version + capabilities travel in _meta per request
  * - Fresh McpServer instance created per request via createMcpHandler
- *
- * Also demonstrates:
- * - SEP-2243: Mcp-Method / Mcp-Name HTTP headers for routing
- * - SEP-2322: Multi Round-Trip Requests (InputRequiredResult)
  */
 
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 import { z } from "zod";
+
+// ──────────────────────────────────────────────────────────────────────
+// Environment bindings
+// ──────────────────────────────────────────────────────────────────────
+interface Env {
+  CANVAS_KV: KVNamespace;
+}
+
+// Module-level variable to capture env from fetch handler
+let currentEnv: Env;
+
+// ──────────────────────────────────────────────────────────────────────
+// Canvas data types
+// ──────────────────────────────────────────────────────────────────────
+interface Pixel {
+  x: number;
+  y: number;
+  color: string;
+  placed_by: string;
+  isolate_id: string;
+  timestamp: string;
+}
+
+interface Canvas {
+  pixels: Record<string, Pixel>; // key is "x,y"
+  created_at: string;
+  last_updated: string;
+}
+
+interface CanvasStats {
+  total_pixels_placed: number;
+  unique_artists: string[];
+  unique_isolates: string[];
+  color_counts: Record<string, number>;
+}
+
+// KV keys
+const CANVAS_KEY = "canvas:current";
+const STATS_KEY = "canvas:stats";
+
+// Canvas dimensions
+const CANVAS_WIDTH = 32;
+const CANVAS_HEIGHT = 32;
 
 // ──────────────────────────────────────────────────────────────────────
 // Worker isolate identity: generated lazily on first request.
@@ -34,17 +77,93 @@ function getIsolateId(): string {
   return ISOLATE_ID;
 }
 
-// DNS types
-interface DnsAnswer {
-  name: string;
-  type: number;
-  TTL: number;
-  data: string;
+// ──────────────────────────────────────────────────────────────────────
+// Canvas helper functions
+// ──────────────────────────────────────────────────────────────────────
+async function getCanvas(kv: KVNamespace): Promise<Canvas> {
+  const data = await kv.get(CANVAS_KEY, "json");
+  if (data) {
+    return data as Canvas;
+  }
+  // Initialize empty canvas
+  const now = new Date().toISOString();
+  return {
+    pixels: {},
+    created_at: now,
+    last_updated: now,
+  };
 }
 
-interface DnsResponse {
-  Status: number;
-  Answer?: DnsAnswer[];
+async function saveCanvas(kv: KVNamespace, canvas: Canvas): Promise<void> {
+  canvas.last_updated = new Date().toISOString();
+  await kv.put(CANVAS_KEY, JSON.stringify(canvas));
+}
+
+async function getStats(kv: KVNamespace): Promise<CanvasStats> {
+  const data = await kv.get(STATS_KEY, "json");
+  if (data) {
+    return data as CanvasStats;
+  }
+  return {
+    total_pixels_placed: 0,
+    unique_artists: [],
+    unique_isolates: [],
+    color_counts: {},
+  };
+}
+
+async function saveStats(kv: KVNamespace, stats: CanvasStats): Promise<void> {
+  await kv.put(STATS_KEY, JSON.stringify(stats));
+}
+
+async function updateStats(
+  kv: KVNamespace,
+  nickname: string,
+  color: string,
+  isolateId: string
+): Promise<void> {
+  const stats = await getStats(kv);
+
+  stats.total_pixels_placed++;
+
+  if (!stats.unique_artists.includes(nickname)) {
+    stats.unique_artists.push(nickname);
+  }
+
+  if (!stats.unique_isolates.includes(isolateId)) {
+    stats.unique_isolates.push(isolateId);
+  }
+
+  stats.color_counts[color] = (stats.color_counts[color] || 0) + 1;
+
+  await saveStats(kv, stats);
+}
+
+function computeCanvasStats(canvas: Canvas, stats: CanvasStats): {
+  total_pixels_on_canvas: number;
+  total_pixels_placed: number;
+  unique_artists_count: number;
+  unique_isolates_count: number;
+  fill_percentage: number;
+  most_used_colors: Array<{ color: string; count: number }>;
+} {
+  const pixelCount = Object.keys(canvas.pixels).length;
+  const totalCells = CANVAS_WIDTH * CANVAS_HEIGHT;
+
+  // Sort colors by usage
+  const colorEntries = Object.entries(stats.color_counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([color, count]) => ({ color, count }));
+
+  return {
+    total_pixels_on_canvas: pixelCount,
+    total_pixels_placed: stats.total_pixels_placed,
+    unique_artists_count: stats.unique_artists.length,
+    unique_isolates_count: stats.unique_isolates.length,
+    fill_percentage: Math.round((pixelCount / totalCells) * 100 * 10) / 10,
+    most_used_colors: colorEntries,
+  };
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -58,30 +177,127 @@ interface DnsResponse {
 const handler = createMcpHandler((_ctx) => {
   requestCounter++;
   const thisRequestNum = requestCounter;
+  const env = currentEnv; // captured from fetch
 
   const server = new McpServer({
-    name: "Stateless MCP Demo",
+    name: "Pixel Canvas MCP Server",
     version: "1.0.0",
   });
 
-  // ── Tool 1: get_server_info ─────────────────────────────────────
-  // The key demo tool. Call it multiple times and watch the isolate ID
-  // stay the same (same isolate) or change (different isolate picked
-  // it up). The request number always increments within an isolate.
+  // ── Tool 1: place_pixel ─────────────────────────────────────────
+  // The main tool. Each phone tap = one place_pixel call.
   server.registerTool(
-    "get_server_info",
+    "place_pixel",
     {
-      title: "Get Server Info",
+      title: "Place Pixel",
       description:
-        "Returns the Worker isolate ID, request number, and timestamp. " +
-        "Call this multiple times to see statelessness in action - " +
-        "different isolates may handle different requests, and there " +
-        "is no session state between calls.",
+        "Place a single pixel on the 32x32 collaborative canvas. " +
+        "Each placement is a stateless MCP call - the canvas state lives in KV.",
+      inputSchema: z.object({
+        x: z
+          .number()
+          .int()
+          .min(0)
+          .max(31)
+          .describe("X coordinate (0-31, left to right)"),
+        y: z
+          .number()
+          .int()
+          .min(0)
+          .max(31)
+          .describe("Y coordinate (0-31, top to bottom)"),
+        color: z
+          .string()
+          .regex(/^#[0-9a-fA-F]{6}$/)
+          .describe('Hex color string like "#ff6600"'),
+        nickname: z
+          .string()
+          .max(32)
+          .optional()
+          .describe("Your nickname (default: anonymous)"),
+      }),
+    },
+    async ({ x, y, color, nickname }) => {
+      const artist = nickname || "anonymous";
+      const isolateId = getIsolateId();
+      const timestamp = new Date().toISOString();
+
+      // Read current canvas
+      const canvas = await getCanvas(env.CANVAS_KV);
+
+      // Create the pixel
+      const pixel: Pixel = {
+        x,
+        y,
+        color: color.toLowerCase(),
+        placed_by: artist,
+        isolate_id: isolateId,
+        timestamp,
+      };
+
+      // Update canvas
+      const key = `${x},${y}`;
+      canvas.pixels[key] = pixel;
+
+      // Save canvas and update stats
+      await saveCanvas(env.CANVAS_KV, canvas);
+      await updateStats(env.CANVAS_KV, artist, color.toLowerCase(), isolateId);
+
+      const totalPixels = Object.keys(canvas.pixels).length;
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(
+              {
+                success: true,
+                pixel: {
+                  x,
+                  y,
+                  color: color.toLowerCase(),
+                  placed_by: artist,
+                  timestamp,
+                },
+                canvas_stats: {
+                  total_pixels: totalPixels,
+                  fill_percentage:
+                    Math.round(
+                      (totalPixels / (CANVAS_WIDTH * CANVAS_HEIGHT)) * 100 * 10
+                    ) / 10,
+                },
+                handled_by_isolate: isolateId,
+                request_number: thisRequestNum,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
+
+  // ── Tool 2: get_canvas ──────────────────────────────────────────
+  // Returns the full canvas state.
+  server.registerTool(
+    "get_canvas",
+    {
+      title: "Get Canvas",
+      description:
+        "Returns the full 32x32 pixel canvas state. " +
+        "All non-empty pixels are returned with their color, artist, and placement info.",
       inputSchema: z.object({}),
     },
     async () => {
-      const now = new Date();
-      const uptimeMs = now.getTime() - new Date(ISOLATE_BORN).getTime();
+      const canvas = await getCanvas(env.CANVAS_KV);
+      const stats = await getStats(env.CANVAS_KV);
+      const isolateId = getIsolateId();
+
+      // Convert pixels object to array
+      const pixelsArray = Object.values(canvas.pixels);
+
+      const computedStats = computeCanvasStats(canvas, stats);
 
       return {
         content: [
@@ -89,13 +305,20 @@ const handler = createMcpHandler((_ctx) => {
             type: "text" as const,
             text: JSON.stringify(
               {
-                isolate_id: getIsolateId(),
+                canvas: {
+                  width: CANVAS_WIDTH,
+                  height: CANVAS_HEIGHT,
+                  created_at: canvas.created_at,
+                  last_updated: canvas.last_updated,
+                  pixels: pixelsArray,
+                },
+                metadata: {
+                  total_pixels: pixelsArray.length,
+                  unique_artists: computedStats.unique_artists_count,
+                  fill_percentage: computedStats.fill_percentage,
+                },
+                handled_by_isolate: isolateId,
                 request_number: thisRequestNum,
-                isolate_born: ISOLATE_BORN,
-                uptime_seconds: Math.round(uptimeMs / 1000),
-                handled_at: now.toISOString(),
-                stateless: true,
-                protocol: "MCP 2026-07-28 (stateless, SEP-1442)",
               },
               null,
               2
@@ -106,161 +329,23 @@ const handler = createMcpHandler((_ctx) => {
     }
   );
 
-  // ── Tool 2: check_website_status ────────────────────────────────
+  // ── Tool 3: get_stats ───────────────────────────────────────────
+  // Returns detailed canvas statistics.
   server.registerTool(
-    "check_website_status",
+    "get_stats",
     {
-      title: "Check Website Status",
+      title: "Get Canvas Stats",
       description:
-        "Checks any website with a HEAD request. Returns status code, " +
-        "response time, selected headers, and whether the site uses Cloudflare.",
-      inputSchema: z.object({
-        url: z.string().describe("Full URL to check, e.g. https://example.com"),
-      }),
+        "Returns detailed statistics about the collaborative canvas: " +
+        "total pixels placed, unique artists, unique isolates, most used colors, and fill percentage.",
+      inputSchema: z.object({}),
     },
-    async ({ url }) => {
-      const start = performance.now();
-      try {
-        const res = await fetch(url, { method: "HEAD", redirect: "follow" });
-        const ms = Math.round(performance.now() - start);
+    async () => {
+      const canvas = await getCanvas(env.CANVAS_KV);
+      const stats = await getStats(env.CANVAS_KV);
+      const isolateId = getIsolateId();
 
-        const headers: Record<string, string> = {};
-        for (const h of [
-          "content-type",
-          "server",
-          "cf-ray",
-          "cf-cache-status",
-          "cache-control",
-        ]) {
-          const v = res.headers.get(h);
-          if (v) headers[h] = v;
-        }
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                {
-                  url,
-                  status: res.status,
-                  status_text: res.statusText,
-                  response_time_ms: ms,
-                  on_cloudflare: !!res.headers.get("cf-ray"),
-                  headers,
-                  handled_by_isolate: getIsolateId(),
-                },
-                null,
-                2
-              ),
-            },
-          ],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                {
-                  url,
-                  error: err instanceof Error ? err.message : String(err),
-                  handled_by_isolate: getIsolateId(),
-                },
-                null,
-                2
-              ),
-            },
-          ],
-        };
-      }
-    }
-  );
-
-  // ── Tool 3: dns_lookup ──────────────────────────────────────────
-  server.registerTool(
-    "dns_lookup",
-    {
-      title: "DNS Lookup",
-      description:
-        "Resolves DNS records using Cloudflare 1.1.1.1 DNS-over-HTTPS. " +
-        "Supports A, AAAA, CNAME, MX, TXT, and NS record types.",
-      inputSchema: z.object({
-        domain: z.string().describe("Domain to resolve, e.g. cloudflare.com"),
-        record_type: z
-          .enum(["A", "AAAA", "CNAME", "MX", "TXT", "NS"])
-          .default("A")
-          .describe("DNS record type"),
-      }),
-    },
-    async ({ domain, record_type }) => {
-      try {
-        const res = await fetch(
-          `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${record_type}`,
-          { headers: { Accept: "application/dns-json" } }
-        );
-        const data = (await res.json()) as DnsResponse;
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                {
-                  domain,
-                  record_type,
-                  status: data.Status === 0 ? "NOERROR" : `STATUS_${data.Status}`,
-                  records: (data.Answer || []).map((a) => ({
-                    type: record_type,
-                    value: a.data,
-                    ttl: a.TTL,
-                  })),
-                  resolver: "Cloudflare 1.1.1.1 (DoH)",
-                  handled_by_isolate: getIsolateId(),
-                },
-                null,
-                2
-              ),
-            },
-          ],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                domain,
-                error: err instanceof Error ? err.message : String(err),
-              }),
-            },
-          ],
-        };
-      }
-    }
-  );
-
-  // ── Tool 4: generate_qr_code ────────────────────────────────────
-  server.registerTool(
-    "generate_qr_code",
-    {
-      title: "Generate QR Code",
-      description:
-        "Creates a QR code image URL for any text or URL. " +
-        "Great for sharing links on-screen that the audience can scan.",
-      inputSchema: z.object({
-        text: z.string().max(2000).describe("Text or URL to encode"),
-        size: z
-          .number()
-          .int()
-          .min(100)
-          .max(500)
-          .default(200)
-          .describe("QR code size in pixels"),
-      }),
-    },
-    async ({ text, size }) => {
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}`;
+      const computedStats = computeCanvasStats(canvas, stats);
 
       return {
         content: [
@@ -268,11 +353,25 @@ const handler = createMcpHandler((_ctx) => {
             type: "text" as const,
             text: JSON.stringify(
               {
-                text: text.length > 80 ? text.slice(0, 80) + "..." : text,
-                size: `${size}x${size}`,
-                qr_url: qrUrl,
-                is_url: text.startsWith("http://") || text.startsWith("https://"),
-                handled_by_isolate: getIsolateId(),
+                stats: {
+                  canvas_dimensions: `${CANVAS_WIDTH}x${CANVAS_HEIGHT}`,
+                  total_cells: CANVAS_WIDTH * CANVAS_HEIGHT,
+                  pixels_on_canvas: computedStats.total_pixels_on_canvas,
+                  total_placements: computedStats.total_pixels_placed,
+                  fill_percentage: computedStats.fill_percentage,
+                  unique_artists: {
+                    count: computedStats.unique_artists_count,
+                    names: stats.unique_artists,
+                  },
+                  unique_isolates: {
+                    count: computedStats.unique_isolates_count,
+                    note: "Each unique isolate is a different Worker instance that handled a request",
+                    ids: stats.unique_isolates,
+                  },
+                  most_used_colors: computedStats.most_used_colors,
+                },
+                handled_by_isolate: isolateId,
+                request_number: thisRequestNum,
               },
               null,
               2
@@ -283,29 +382,67 @@ const handler = createMcpHandler((_ctx) => {
     }
   );
 
-  // ── Tool 5: stateless_proof ─────────────────────────────────────
-  // A tool specifically designed to prove the stateless nature of the
-  // protocol. It accepts a "previous_isolate_id" parameter so the
-  // frontend can show side-by-side that requests land on different
-  // (or the same) isolates with zero coordination.
+  // ── Tool 4: clear_canvas ────────────────────────────────────────
+  // Clears the canvas (requires confirmation).
   server.registerTool(
-    "stateless_proof",
+    "clear_canvas",
     {
-      title: "Stateless Proof",
+      title: "Clear Canvas",
       description:
-        "Proves statelessness by comparing the current isolate with a " +
-        "previous one. Pass the isolate_id from a prior call to see " +
-        "whether this request landed on the same or a different instance. " +
-        "No session state is needed - the proof travels in the request.",
+        "Clears the entire canvas. Requires confirmation by passing 'yes' as the confirm parameter.",
       inputSchema: z.object({
-        previous_isolate_id: z
+        confirm: z
           .string()
-          .optional()
-          .describe("The isolate_id from a previous get_server_info call"),
+          .describe("Must be exactly 'yes' to confirm clearing the canvas"),
       }),
     },
-    async ({ previous_isolate_id }) => {
-      const sameIsolate = previous_isolate_id === getIsolateId();
+    async ({ confirm }) => {
+      const isolateId = getIsolateId();
+
+      if (confirm !== "yes") {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  success: false,
+                  error:
+                    "Confirmation required. Pass confirm: 'yes' to clear the canvas.",
+                  handled_by_isolate: isolateId,
+                  request_number: thisRequestNum,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      // Get stats before clearing for the response
+      const oldCanvas = await getCanvas(env.CANVAS_KV);
+      const oldStats = await getStats(env.CANVAS_KV);
+      const oldPixelCount = Object.keys(oldCanvas.pixels).length;
+
+      // Clear canvas
+      const now = new Date().toISOString();
+      const newCanvas: Canvas = {
+        pixels: {},
+        created_at: now,
+        last_updated: now,
+      };
+
+      // Reset stats
+      const newStats: CanvasStats = {
+        total_pixels_placed: 0,
+        unique_artists: [],
+        unique_isolates: [],
+        color_counts: {},
+      };
+
+      await saveCanvas(env.CANVAS_KV, newCanvas);
+      await saveStats(env.CANVAS_KV, newStats);
 
       return {
         content: [
@@ -313,18 +450,15 @@ const handler = createMcpHandler((_ctx) => {
             type: "text" as const,
             text: JSON.stringify(
               {
-                current_isolate: getIsolateId(),
-                previous_isolate: previous_isolate_id || "(none provided)",
-                same_isolate: previous_isolate_id ? sameIsolate : null,
-                explanation: previous_isolate_id
-                  ? sameIsolate
-                    ? "Same isolate handled both requests. This can happen - statelessness means any isolate CAN handle it, not that a different one MUST."
-                    : "Different isolate! This request was handled by a completely different Worker instance. No session, no handshake, no coordination. The request was self-contained."
-                  : "No previous ID provided. Call get_server_info first, then pass its isolate_id here.",
-                protocol_note:
-                  "In MCP 2026-07-28 (SEP-1442), there is no initialization handshake. " +
-                  "Each request carries its protocol version in _meta. " +
-                  "The server needs no memory of previous requests.",
+                success: true,
+                message: "Canvas cleared!",
+                cleared: {
+                  pixels_removed: oldPixelCount,
+                  artists_reset: oldStats.unique_artists.length,
+                  total_placements_before: oldStats.total_pixels_placed,
+                },
+                cleared_at: now,
+                handled_by_isolate: isolateId,
                 request_number: thisRequestNum,
               },
               null,
@@ -343,7 +477,10 @@ const handler = createMcpHandler((_ctx) => {
 // Worker fetch handler with CORS
 // ──────────────────────────────────────────────────────────────────────
 export default {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Capture env for the MCP handler
+    currentEnv = env;
+
     const corsHeaders: Record<string, string> = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS, DELETE",
@@ -369,18 +506,37 @@ export default {
       return out;
     }
 
-    // Health / info endpoint
+    // Health / info endpoint with canvas stats
     if (url.pathname === "/" || url.pathname === "/health") {
+      const canvas = await getCanvas(env.CANVAS_KV);
+      const stats = await getStats(env.CANVAS_KV);
+      const computedStats = computeCanvasStats(canvas, stats);
+
       return new Response(
-        JSON.stringify({
-          name: "Stateless MCP Demo Server",
-          version: "1.0.0",
-          protocol: "MCP 2026-07-28 (stateless)",
-          seps: ["SEP-1442", "SEP-2322", "SEP-2243"],
-          isolate_id: getIsolateId(),
-          mcp_endpoint: "/mcp",
-          docs: "https://github.com/Sliking/stateless-mcp-demo",
-        }),
+        JSON.stringify(
+          {
+            name: "Pixel Canvas MCP Server",
+            version: "1.0.0",
+            protocol: "MCP 2026-07-28 (stateless)",
+            seps: ["SEP-1442", "SEP-2322", "SEP-2243"],
+            isolate_id: getIsolateId(),
+            isolate_born: ISOLATE_BORN,
+            request_count: requestCounter,
+            mcp_endpoint: "/mcp",
+            canvas: {
+              dimensions: `${CANVAS_WIDTH}x${CANVAS_HEIGHT}`,
+              pixels_placed: computedStats.total_pixels_on_canvas,
+              total_placements: computedStats.total_pixels_placed,
+              fill_percentage: computedStats.fill_percentage,
+              unique_artists: computedStats.unique_artists_count,
+              unique_isolates: computedStats.unique_isolates_count,
+              most_popular_colors: computedStats.most_used_colors.slice(0, 5),
+            },
+            tools: ["place_pixel", "get_canvas", "get_stats", "clear_canvas"],
+          },
+          null,
+          2
+        ),
         {
           headers: {
             "Content-Type": "application/json",

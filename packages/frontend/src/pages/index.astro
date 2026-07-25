@@ -1,5 +1,5 @@
 ---
-// Stateless MCP Demo - Mobile-first UI
+// Stateless MCP Pixel Canvas - Collaborative pixel art demo
 ---
 
 <!DOCTYPE html>
@@ -9,7 +9,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#0d1117">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <title>Stateless MCP Demo</title>
+  <title>Stateless MCP Canvas</title>
   <style>
     * {
       margin: 0;
@@ -27,11 +27,13 @@
       --success: #3fb950;
       --border: #30363d;
       --error: #f85149;
+      --grid-line: #1e2430;
     }
 
     html, body {
       height: 100%;
       overflow: hidden;
+      touch-action: none;
     }
 
     body {
@@ -47,7 +49,7 @@
     .header {
       background: var(--card-bg);
       border-bottom: 1px solid var(--border);
-      padding: 16px;
+      padding: 12px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -57,11 +59,11 @@
     .header-title {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
     .header-title h1 {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 600;
       background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%);
       -webkit-background-clip: text;
@@ -70,8 +72,8 @@
     }
 
     .accent-bar {
-      width: 4px;
-      height: 24px;
+      width: 3px;
+      height: 20px;
       background: var(--accent);
       border-radius: 2px;
     }
@@ -102,578 +104,356 @@
       animation: pulse 1.5s ease-in-out infinite;
     }
 
+    .status-dot.error {
+      background: var(--error);
+    }
+
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.5; transform: scale(1.2); }
     }
 
-    /* Connection Panel */
-    .connection-panel {
+    /* Nickname Bar */
+    .nickname-bar {
       background: var(--card-bg);
       border-bottom: 1px solid var(--border);
-      padding: 12px 16px;
+      padding: 10px 16px;
       display: flex;
+      align-items: center;
       gap: 10px;
       flex-shrink: 0;
     }
 
-    .url-input {
+    .nickname-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+
+    .nickname-input {
       flex: 1;
+      max-width: 200px;
       background: var(--bg);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 14px;
+      border-radius: 6px;
+      padding: 8px 12px;
       color: var(--text);
       font-size: 14px;
       outline: none;
       transition: border-color 0.2s ease;
     }
 
-    .url-input:focus {
+    .nickname-input:focus {
       border-color: var(--accent);
     }
 
-    .connect-btn {
-      background: var(--accent);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      padding: 10px 20px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .connect-btn:hover {
-      background: #ff9a47;
-      transform: translateY(-1px);
-    }
-
-    .connect-btn:active {
-      transform: translateY(0);
-    }
-
-    .connect-btn:disabled {
-      background: var(--border);
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .connect-btn.disconnect {
-      background: var(--error);
-    }
-
-    /* Main Content */
-    .main-content {
+    /* Main Canvas Area */
+    .canvas-container {
       flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    /* Section Headers */
-    .section-header {
-      padding: 12px 16px 8px;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text-secondary);
-      background: var(--bg);
-      flex-shrink: 0;
-    }
-
-    /* Tools Panel */
-    .tools-panel {
-      padding: 0 16px 16px;
-      display: flex;
-      gap: 10px;
-      overflow-x: auto;
-      flex-shrink: 0;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-    }
-
-    .tools-panel::-webkit-scrollbar {
-      display: none;
-    }
-
-    .tool-card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px;
-      min-width: 160px;
-      max-width: 200px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      flex-shrink: 0;
-    }
-
-    .tool-card:hover {
-      border-color: var(--accent);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-    }
-
-    .tool-card:active {
-      transform: translateY(0);
-    }
-
-    .tool-icon {
-      width: 40px;
-      height: 40px;
-      background: linear-gradient(135deg, var(--accent) 0%, #ff9a47 100%);
-      border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 12px;
-      font-size: 20px;
-    }
-
-    .tool-name {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 4px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .tool-desc {
-      font-size: 12px;
-      color: var(--text-secondary);
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-
-    .tools-empty {
-      color: var(--text-secondary);
-      font-size: 14px;
-      padding: 20px 0;
-      text-align: center;
-      width: 100%;
-    }
-
-    /* Results Panel */
-    .results-panel {
-      flex: 1;
-      overflow-y: auto;
-      padding: 0 16px 16px;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    .result-card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
       padding: 16px;
-      margin-bottom: 12px;
-      animation: slideIn 0.3s ease;
+      overflow: hidden;
     }
 
-    @keyframes slideIn {
-      from {
-        opacity: 0;
-        transform: translateY(-10px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .result-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 12px;
-    }
-
-    .result-tool-name {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--accent);
-    }
-
-    .result-timestamp {
-      font-size: 11px;
-      color: var(--text-secondary);
-    }
-
-    .result-instance {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 600;
-      margin-bottom: 12px;
-    }
-
-    .instance-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-    }
-
-    .result-content {
+    #pixel-canvas {
       background: var(--bg);
       border-radius: 8px;
-      padding: 12px;
-      font-family: 'SF Mono', Monaco, Consolas, monospace;
-      font-size: 12px;
-      overflow-x: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
+      touch-action: none;
+      cursor: crosshair;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
     }
 
-    .result-error {
-      color: var(--error);
+    /* Color Picker Bar */
+    .color-picker {
+      background: var(--card-bg);
+      border-top: 1px solid var(--border);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
     }
 
-    .results-empty {
+    .color-picker-label {
+      font-size: 16px;
+      margin-right: 4px;
+    }
+
+    .color-swatch {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .color-swatch:hover {
+      transform: scale(1.1);
+    }
+
+    .color-swatch.selected {
+      border-color: var(--text);
+      transform: scale(1.15);
+      box-shadow: 0 0 12px currentColor;
+    }
+
+    .color-swatch:active {
+      transform: scale(0.95);
+    }
+
+    /* Stats Bar */
+    .stats-bar {
+      background: var(--card-bg);
+      border-top: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      font-size: 13px;
       color: var(--text-secondary);
-      font-size: 14px;
-      text-align: center;
-      padding: 40px 20px;
+      flex-shrink: 0;
     }
 
-    /* Modal */
-    .modal-overlay {
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .stat-value {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .isolate-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      transition: background-color 0.3s ease;
+    }
+
+    /* Isolate color palette */
+    .isolate-0 { background: #f6821f; }
+    .isolate-1 { background: #3fb950; }
+    .isolate-2 { background: #8884d8; }
+    .isolate-3 { background: #82ca9d; }
+    .isolate-4 { background: #ffc658; }
+    .isolate-5 { background: #ff8080; }
+    .isolate-6 { background: #80c8ff; }
+    .isolate-7 { background: #c880ff; }
+
+    /* Responsive adjustments */
+    @media (min-width: 768px) {
+      .header {
+        padding: 14px 24px;
+      }
+
+      .header-title h1 {
+        font-size: 20px;
+      }
+
+      .nickname-bar {
+        padding: 12px 24px;
+      }
+
+      .canvas-container {
+        padding: 24px;
+      }
+
+      .color-picker {
+        padding: 16px 24px;
+        gap: 14px;
+      }
+
+      .color-swatch {
+        width: 40px;
+        height: 40px;
+      }
+
+      .stats-bar {
+        padding: 12px 24px;
+        gap: 24px;
+        font-size: 14px;
+      }
+    }
+
+    /* Loading overlay */
+    .loading-overlay {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.8);
+      background: rgba(13, 17, 23, 0.9);
       display: flex;
-      align-items: flex-end;
+      align-items: center;
       justify-content: center;
       z-index: 1000;
-      opacity: 0;
-      visibility: hidden;
-      transition: all 0.3s ease;
-    }
-
-    .modal-overlay.active {
       opacity: 1;
-      visibility: visible;
+      transition: opacity 0.3s ease;
     }
 
-    .modal {
-      background: var(--card-bg);
-      border-radius: 20px 20px 0 0;
-      width: 100%;
-      max-width: 500px;
-      max-height: 80vh;
-      overflow-y: auto;
-      transform: translateY(100%);
-      transition: transform 0.3s ease;
+    .loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
     }
 
-    .modal-overlay.active .modal {
-      transform: translateY(0);
-    }
-
-    .modal-header {
-      padding: 20px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      background: var(--card-bg);
-    }
-
-    .modal-title {
-      font-size: 18px;
-      font-weight: 600;
-    }
-
-    .modal-close {
-      width: 32px;
-      height: 32px;
-      background: var(--bg);
-      border: none;
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
       border-radius: 50%;
-      color: var(--text);
-      font-size: 18px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      animation: spin 1s linear infinite;
     }
 
-    .modal-body {
-      padding: 20px;
-    }
-
-    .modal-desc {
-      color: var(--text-secondary);
-      font-size: 14px;
-      margin-bottom: 20px;
-    }
-
-    .input-group {
-      margin-bottom: 16px;
-    }
-
-    .input-label {
-      display: block;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-secondary);
-      margin-bottom: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .input-required {
-      color: var(--error);
-      margin-left: 4px;
-    }
-
-    .input-field {
-      width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px 14px;
-      color: var(--text);
-      font-size: 14px;
-      outline: none;
-      transition: border-color 0.2s ease;
-    }
-
-    .input-field:focus {
-      border-color: var(--accent);
-    }
-
-    .input-hint {
-      font-size: 11px;
-      color: var(--text-secondary);
-      margin-top: 4px;
-    }
-
-    .modal-actions {
-      padding: 20px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      gap: 12px;
-    }
-
-    .btn-cancel {
-      flex: 1;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 14px;
-      color: var(--text);
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .btn-run {
-      flex: 2;
-      background: var(--accent);
-      border: none;
-      border-radius: 8px;
-      padding: 14px;
-      color: white;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .btn-run:hover {
-      background: #ff9a47;
-    }
-
-    .btn-run:disabled {
-      background: var(--border);
-      cursor: not-allowed;
-    }
-
-    /* Instance color palette */
-    .instance-color-0 { background: rgba(246, 130, 31, 0.2); color: #f6821f; }
-    .instance-color-0 .instance-dot { background: #f6821f; }
-    .instance-color-1 { background: rgba(63, 185, 80, 0.2); color: #3fb950; }
-    .instance-color-1 .instance-dot { background: #3fb950; }
-    .instance-color-2 { background: rgba(136, 132, 216, 0.2); color: #8884d8; }
-    .instance-color-2 .instance-dot { background: #8884d8; }
-    .instance-color-3 { background: rgba(130, 202, 157, 0.2); color: #82ca9d; }
-    .instance-color-3 .instance-dot { background: #82ca9d; }
-    .instance-color-4 { background: rgba(255, 198, 88, 0.2); color: #ffc658; }
-    .instance-color-4 .instance-dot { background: #ffc658; }
-    .instance-color-5 { background: rgba(255, 128, 128, 0.2); color: #ff8080; }
-    .instance-color-5 .instance-dot { background: #ff8080; }
-    .instance-color-6 { background: rgba(128, 200, 255, 0.2); color: #80c8ff; }
-    .instance-color-6 .instance-dot { background: #80c8ff; }
-    .instance-color-7 { background: rgba(200, 128, 255, 0.2); color: #c880ff; }
-    .instance-color-7 .instance-dot { background: #c880ff; }
-
-    /* Responsive adjustments */
-    @media (min-width: 768px) {
-      .header-title h1 {
-        font-size: 22px;
-      }
-
-      .tools-panel {
-        flex-wrap: wrap;
-        overflow-x: visible;
-      }
-
-      .tool-card {
-        min-width: 180px;
-      }
-
-      .modal {
-        border-radius: 20px;
-        margin: auto;
-        max-height: 70vh;
-      }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
   </style>
 </head>
 <body>
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+  </div>
+
   <!-- Header -->
   <header class="header">
     <div class="header-title">
       <div class="accent-bar"></div>
-      <h1>Stateless MCP</h1>
+      <h1>Stateless MCP Canvas</h1>
     </div>
     <div class="status-indicator">
       <div id="status-dot" class="status-dot"></div>
-      <span id="status-text">Disconnected</span>
+      <span id="status-text">Connecting...</span>
     </div>
   </header>
 
-  <!-- Connection Panel -->
-  <div class="connection-panel">
+  <!-- Nickname Input -->
+  <div class="nickname-bar">
+    <span class="nickname-label">Nickname:</span>
     <input
-      type="url"
-      id="server-url"
-      class="url-input"
-      placeholder="MCP Server URL"
-      value="https://stateless-mcp-demo-server.miguel-pinto-infra.workers.dev/mcp"
+      type="text"
+      id="nickname-input"
+      class="nickname-input"
+      placeholder="Anonymous"
+      maxlength="20"
     />
-    <button id="connect-btn" class="connect-btn">Connect</button>
   </div>
 
-  <!-- Main Content -->
-  <main class="main-content">
-    <!-- Tools Section -->
-    <div class="section-header">Available Tools</div>
-    <div id="tools-panel" class="tools-panel">
-      <div class="tools-empty">Connect to a stateless MCP server to discover tools (no handshake needed)</div>
-    </div>
+  <!-- Canvas Container -->
+  <div class="canvas-container">
+    <canvas id="pixel-canvas"></canvas>
+  </div>
 
-    <!-- Results Section -->
-    <div class="section-header">Results</div>
-    <div id="results-panel" class="results-panel">
-      <div class="results-empty">Tool call results will appear here</div>
-    </div>
-  </main>
+  <!-- Color Picker -->
+  <div class="color-picker">
+    <span class="color-picker-label">🎨</span>
+    <div class="color-swatch selected" data-color="#f6821f" style="background: #f6821f;"></div>
+    <div class="color-swatch" data-color="#ff4444" style="background: #ff4444;"></div>
+    <div class="color-swatch" data-color="#44ff44" style="background: #44ff44;"></div>
+    <div class="color-swatch" data-color="#4488ff" style="background: #4488ff;"></div>
+    <div class="color-swatch" data-color="#ffff44" style="background: #ffff44;"></div>
+    <div class="color-swatch" data-color="#ff44ff" style="background: #ff44ff;"></div>
+    <div class="color-swatch" data-color="#44ffff" style="background: #44ffff;"></div>
+    <div class="color-swatch" data-color="#ffffff" style="background: #ffffff;"></div>
+    <div class="color-swatch" data-color="#888888" style="background: #888888;"></div>
+    <div class="color-swatch" data-color="#1e2430" style="background: #1e2430; border: 1px solid #30363d;"></div>
+  </div>
 
-  <!-- Modal for Tool Input -->
-  <div id="modal-overlay" class="modal-overlay">
-    <div class="modal">
-      <div class="modal-header">
-        <h2 id="modal-title" class="modal-title">Tool Name</h2>
-        <button id="modal-close" class="modal-close">×</button>
-      </div>
-      <div class="modal-body">
-        <p id="modal-desc" class="modal-desc">Tool description</p>
-        <div id="modal-inputs"></div>
-      </div>
-      <div class="modal-actions">
-        <button id="btn-cancel" class="btn-cancel">Cancel</button>
-        <button id="btn-run" class="btn-run">Run Tool</button>
-      </div>
+  <!-- Stats Bar -->
+  <div class="stats-bar">
+    <div class="stat-item">
+      <span id="stat-pixels" class="stat-value">0</span>
+      <span>pixels</span>
+    </div>
+    <div class="stat-item">
+      <span id="stat-artists" class="stat-value">0</span>
+      <span>artists</span>
+    </div>
+    <div class="stat-item">
+      <span>⚡</span>
+      <span id="stat-isolates" class="stat-value">0</span>
+      <span>isolates</span>
+    </div>
+    <div class="stat-item">
+      <div id="isolate-dot" class="isolate-dot isolate-0"></div>
     </div>
   </div>
 
   <script>
-    // MCP Client State
+    // ══════════════════════════════════════════════════════════════
+    // Stateless MCP Pixel Canvas
+    // Protocol: 2026-07-28 (SEP-1442 stateless mode)
+    // ══════════════════════════════════════════════════════════════
+
+    const CONFIG = {
+      GRID_SIZE: 32,
+      CELL_SIZE: 12,
+      MAX_CANVAS_WIDTH: 384,
+      SERVER_URL: 'https://stateless-mcp-demo-server.miguel-pinto-infra.workers.dev/mcp',
+      POLL_INTERVAL: 2000,
+      PROTOCOL_VERSION: '2026-07-28',
+    };
+
+    const CLIENT_INFO = { name: 'stateless-mcp-canvas', version: '1.0.0' };
+
+    // ── Application State ──
     const state = {
       connected: false,
-      connecting: false,
-      serverUrl: '',
-      sessionId: null,
-      tools: [],
-      results: [],
-      instanceColors: new Map(),
-      nextColorIndex: 0,
-      messageId: 0
+      selectedColor: '#f6821f',
+      nickname: '',
+      pixels: new Map(),
+      messageId: 0,
+      isPlacing: false,
+      pollTimer: null,
+      lastIsolateId: null,
+      isolateColors: new Map(),
+      nextIsolateColor: 0,
+      stats: {
+        totalPixels: 0,
+        uniqueArtists: 0,
+        uniqueIsolates: 0,
+      },
     };
 
-    // DOM Elements
+    // ── DOM Elements ──
     const elements = {
+      loadingOverlay: document.getElementById('loading-overlay'),
       statusDot: document.getElementById('status-dot'),
       statusText: document.getElementById('status-text'),
-      serverUrl: document.getElementById('server-url'),
-      connectBtn: document.getElementById('connect-btn'),
-      toolsPanel: document.getElementById('tools-panel'),
-      resultsPanel: document.getElementById('results-panel'),
-      modalOverlay: document.getElementById('modal-overlay'),
-      modalTitle: document.getElementById('modal-title'),
-      modalDesc: document.getElementById('modal-desc'),
-      modalInputs: document.getElementById('modal-inputs'),
-      modalClose: document.getElementById('modal-close'),
-      btnCancel: document.getElementById('btn-cancel'),
-      btnRun: document.getElementById('btn-run')
+      nicknameInput: document.getElementById('nickname-input'),
+      canvas: document.getElementById('pixel-canvas'),
+      statPixels: document.getElementById('stat-pixels'),
+      statArtists: document.getElementById('stat-artists'),
+      statIsolates: document.getElementById('stat-isolates'),
+      isolateDot: document.getElementById('isolate-dot'),
+      colorSwatches: document.querySelectorAll('.color-swatch'),
     };
 
-    // Tool icons based on name patterns
-    function getToolIcon(name) {
-      const lower = name.toLowerCase();
-      if (lower.includes('server_info') || lower.includes('server')) return '🖥️';
-      if (lower.includes('website') || lower.includes('status') || lower.includes('check')) return '🌐';
-      if (lower.includes('dns')) return '🔍';
-      if (lower.includes('qr')) return '📱';
-      if (lower.includes('proof') || lower.includes('stateless')) return '🔬';
-      if (lower.includes('latency') || lower.includes('network')) return '📡';
-      return '⚡';
+    const ctx = elements.canvas.getContext('2d');
+
+    // ══════════════════════════════════════════════════════════════
+    // MCP Client (Stateless Protocol 2026-07-28)
+    // ══════════════════════════════════════════════════════════════
+
+    function buildMeta() {
+      return {
+        'io.modelcontextprotocol/protocolVersion': CONFIG.PROTOCOL_VERSION,
+        'io.modelcontextprotocol/clientInfo': CLIENT_INFO,
+        'io.modelcontextprotocol/clientCapabilities': {},
+      };
     }
 
-    // Get color class for an instance ID
-    function getInstanceColorClass(instanceId) {
-      if (!state.instanceColors.has(instanceId)) {
-        state.instanceColors.set(instanceId, state.nextColorIndex % 8);
-        state.nextColorIndex++;
-      }
-      return `instance-color-${state.instanceColors.get(instanceId)}`;
-    }
-
-    // Update connection status UI
-    function updateStatus(status, text) {
-      elements.statusDot.className = 'status-dot ' + status;
-      elements.statusText.textContent = text;
-      
-      if (status === 'connected') {
-        elements.connectBtn.textContent = 'Disconnect';
-        elements.connectBtn.classList.add('disconnect');
-        elements.connectBtn.disabled = false;
-      } else if (status === 'connecting') {
-        elements.connectBtn.textContent = 'Connecting...';
-        elements.connectBtn.disabled = true;
-      } else {
-        elements.connectBtn.textContent = 'Connect';
-        elements.connectBtn.classList.remove('disconnect');
-        elements.connectBtn.disabled = false;
-      }
-    }
-
-    // Parse SSE response
     function parseSSEResponse(text) {
       const lines = text.split('\n');
       for (const line of lines) {
@@ -688,34 +468,9 @@
       return null;
     }
 
-    // ──────────────────────────────────────────────────────────
-    // Stateless MCP Client (MCP 2026-07-28 / SEP-1442)
-    //
-    // Key difference from v1: NO initialization handshake.
-    // Every request is self-contained. Protocol version and
-    // client info travel in _meta on EACH request.
-    // No session ID. No state between requests.
-    // ──────────────────────────────────────────────────────────
-
-    const PROTOCOL_VERSION = '2026-07-28';
-    const CLIENT_INFO = { name: 'stateless-mcp-demo-ui', version: '1.0.0' };
-
-    // Build the _meta envelope for stateless requests (SEP-1442)
-    // Keys use the io.modelcontextprotocol/ namespace per the v2 SDK
-    function buildMeta() {
-      return {
-        'io.modelcontextprotocol/protocolVersion': PROTOCOL_VERSION,
-        'io.modelcontextprotocol/clientInfo': CLIENT_INFO,
-        'io.modelcontextprotocol/clientCapabilities': {},
-      };
-    }
-
-    // Send a stateless JSON-RPC request
-    // Each request carries its own protocol version - no prior handshake needed
     async function sendRequest(method, params = {}) {
       const id = ++state.messageId;
 
-      // Inject _meta into params for stateless protocol (SEP-1442)
       const enrichedParams = {
         ...params,
         _meta: {
@@ -731,20 +486,18 @@
         params: enrichedParams,
       };
 
-      // SEP-2243: Mcp-Method and Mcp-Name in HTTP headers
       const headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json, text/event-stream',
-        'MCP-Protocol-Version': PROTOCOL_VERSION,
+        'MCP-Protocol-Version': CONFIG.PROTOCOL_VERSION,
         'Mcp-Method': method,
       };
 
-      // For tool calls, also add Mcp-Name (SEP-2243)
       if (method === 'tools/call' && params.name) {
         headers['Mcp-Name'] = params.name;
       }
 
-      const response = await fetch(state.serverUrl, {
+      const response = await fetch(CONFIG.SERVER_URL, {
         method: 'POST',
         headers,
         body: JSON.stringify(request),
@@ -756,366 +509,337 @@
       if (contentType.includes('text/event-stream')) {
         return parseSSEResponse(text);
       } else {
-        try {
-          return JSON.parse(text);
-        } catch (e) {
-          console.error('Failed to parse response:', text);
-          throw new Error('Invalid response from server');
-        }
+        return JSON.parse(text);
       }
     }
 
-    // Connect to MCP server - STATELESS: no init handshake!
-    // We just call tools/list directly. That's the whole point of SEP-1442.
-    async function connect() {
-      state.serverUrl = elements.serverUrl.value.trim();
-      if (!state.serverUrl) {
-        alert('Please enter a server URL');
-        return;
-      }
+    async function callTool(name, args = {}) {
+      return sendRequest('tools/call', { name, arguments: args });
+    }
 
-      state.connecting = true;
-      updateStatus('connecting', 'Connecting...');
+    // ══════════════════════════════════════════════════════════════
+    // Canvas Rendering
+    // ══════════════════════════════════════════════════════════════
 
-      try {
-        // ── NO initialize handshake ──
-        // In stateless MCP (2026-07-28), we skip the init ceremony.
-        // We can optionally call server/discover, or just go straight
-        // to tools/list. The protocol version travels in _meta.
+    function setupCanvas() {
+      const container = elements.canvas.parentElement;
+      const availableWidth = container.clientWidth - 32;
+      const availableHeight = container.clientHeight - 32;
+      
+      const maxSize = Math.min(availableWidth, availableHeight, CONFIG.MAX_CANVAS_WIDTH);
+      const cellSize = Math.floor(maxSize / CONFIG.GRID_SIZE);
+      const canvasSize = cellSize * CONFIG.GRID_SIZE;
 
-        // Try stateless tools/list first (v2 protocol)
-        let toolsResponse = await sendRequest('tools/list', {});
+      elements.canvas.width = canvasSize;
+      elements.canvas.height = canvasSize;
+      elements.canvas.style.width = `${canvasSize}px`;
+      elements.canvas.style.height = `${canvasSize}px`;
 
-        // If server returns unsupported-version error or method-not-found, fall back to v1 handshake
-        if (toolsResponse.error && (toolsResponse.error.code === -32000 || toolsResponse.error.code === -32022 || toolsResponse.error.code === -32601)) {
-          console.log('Server requires v1 protocol, falling back to init handshake...');
-          state.protocolVersion = '2025-03-26';
+      CONFIG.CELL_SIZE = cellSize;
 
-          // v1 init handshake
-          const initReq = {
-            jsonrpc: '2.0',
-            id: ++state.messageId,
-            method: 'initialize',
-            params: {
-              protocolVersion: '2025-03-26',
-              capabilities: {},
-              clientInfo: CLIENT_INFO,
-            },
-          };
-          const initRes = await fetch(state.serverUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' },
-            body: JSON.stringify(initReq),
-          });
-          const initData = await initRes.text();
-          const initParsed = initData.includes('data: ') ? parseSSEResponse(initData) : JSON.parse(initData);
-          if (initParsed?.error) throw new Error(initParsed.error.message);
+      drawCanvas();
+    }
 
-          // Capture session ID if v1 server provides one
-          const sid = initRes.headers.get('Mcp-Session-Id');
-          if (sid) state.sessionId = sid;
+    function drawCanvas() {
+      const size = elements.canvas.width;
+      const cellSize = CONFIG.CELL_SIZE;
 
-          // Send initialized notification
-          const notif = { jsonrpc: '2.0', method: 'notifications/initialized' };
-          const notifHeaders = { 'Content-Type': 'application/json' };
-          if (state.sessionId) notifHeaders['Mcp-Session-Id'] = state.sessionId;
-          await fetch(state.serverUrl, { method: 'POST', headers: notifHeaders, body: JSON.stringify(notif) });
+      // Clear canvas
+      ctx.fillStyle = '#0d1117';
+      ctx.fillRect(0, 0, size, size);
 
-          // Now list tools (v1 style)
-          const listReq = { jsonrpc: '2.0', id: ++state.messageId, method: 'tools/list', params: {} };
-          const listHeaders = { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' };
-          if (state.sessionId) listHeaders['Mcp-Session-Id'] = state.sessionId;
-          const listRes = await fetch(state.serverUrl, { method: 'POST', headers: listHeaders, body: JSON.stringify(listReq) });
-          const listData = await listRes.text();
-          toolsResponse = listData.includes('data: ') ? parseSSEResponse(listData) : JSON.parse(listData);
-        }
+      // Draw grid lines
+      ctx.strokeStyle = '#1e2430';
+      ctx.lineWidth = 1;
+
+      for (let i = 0; i <= CONFIG.GRID_SIZE; i++) {
+        const pos = i * cellSize;
         
-        if (toolsResponse.error) {
-          throw new Error(toolsResponse.error.message || 'Failed to list tools');
-        }
+        ctx.beginPath();
+        ctx.moveTo(pos + 0.5, 0);
+        ctx.lineTo(pos + 0.5, size);
+        ctx.stroke();
 
-        state.tools = toolsResponse.result?.tools || [];
-        state.connected = true;
-        state.connecting = false;
+        ctx.beginPath();
+        ctx.moveTo(0, pos + 0.5);
+        ctx.lineTo(size, pos + 0.5);
+        ctx.stroke();
+      }
 
-        updateStatus('connected', `Connected (${state.protocolVersion || PROTOCOL_VERSION})`);
-        renderTools();
-
-      } catch (error) {
-        console.error('Connection failed:', error);
-        state.connecting = false;
-        state.connected = false;
-        updateStatus('', 'Disconnected');
-        alert('Connection failed: ' + error.message);
+      // Draw pixels
+      for (const [key, pixel] of state.pixels) {
+        drawPixel(pixel.x, pixel.y, pixel.color, pixel.isolate_id);
       }
     }
 
-    // Disconnect
-    function disconnect() {
-      state.connected = false;
-      state.sessionId = null;
-      state.tools = [];
-      updateStatus('', 'Disconnected');
-      renderTools();
-    }
+    function drawPixel(x, y, color, isolateId = null) {
+      const cellSize = CONFIG.CELL_SIZE;
+      const px = x * cellSize;
+      const py = y * cellSize;
 
-    // Render tools in the UI
-    function renderTools() {
-      if (state.tools.length === 0) {
-        elements.toolsPanel.innerHTML = `
-          <div class="tools-empty">
-            ${state.connected ? 'No tools available on this server' : 'Connect to a stateless MCP server (no handshake needed)'}
-          </div>
-        `;
-        return;
+      // Fill the cell
+      ctx.fillStyle = color;
+      ctx.fillRect(px + 1, py + 1, cellSize - 2, cellSize - 2);
+
+      // Optional: subtle glow based on isolate
+      if (isolateId && state.isolateColors.has(isolateId)) {
+        const glowColor = getIsolateColorHex(isolateId);
+        ctx.strokeStyle = glowColor;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px + 0.5, py + 0.5, cellSize - 1, cellSize - 1);
       }
-
-      elements.toolsPanel.innerHTML = state.tools.map((tool, index) => `
-        <div class="tool-card" data-index="${index}">
-          <div class="tool-icon">${getToolIcon(tool.name)}</div>
-          <div class="tool-name">${tool.name}</div>
-          <div class="tool-desc">${tool.description || 'No description'}</div>
-        </div>
-      `).join('');
-
-      // Add click handlers
-      elements.toolsPanel.querySelectorAll('.tool-card').forEach(card => {
-        card.addEventListener('click', () => {
-          const index = parseInt(card.dataset.index);
-          openToolModal(state.tools[index]);
-        });
-      });
     }
 
-    // Current tool being edited in modal
-    let currentTool = null;
+    function getIsolateColorIndex(isolateId) {
+      if (!state.isolateColors.has(isolateId)) {
+        state.isolateColors.set(isolateId, state.nextIsolateColor % 8);
+        state.nextIsolateColor++;
+      }
+      return state.isolateColors.get(isolateId);
+    }
 
-    // Open tool modal
-    function openToolModal(tool) {
-      currentTool = tool;
-      elements.modalTitle.textContent = tool.name;
-      elements.modalDesc.textContent = tool.description || 'No description provided';
+    function getIsolateColorHex(isolateId) {
+      const colors = ['#f6821f', '#3fb950', '#8884d8', '#82ca9d', '#ffc658', '#ff8080', '#80c8ff', '#c880ff'];
+      return colors[getIsolateColorIndex(isolateId)];
+    }
 
-      // Build input fields from schema
-      const schema = tool.inputSchema || {};
-      const properties = schema.properties || {};
-      const required = schema.required || [];
+    // ══════════════════════════════════════════════════════════════
+    // Canvas Interaction
+    // ══════════════════════════════════════════════════════════════
 
-      if (Object.keys(properties).length === 0) {
-        elements.modalInputs.innerHTML = `
-          <p style="color: var(--text-secondary); font-size: 14px;">
-            This tool doesn't require any input parameters.
-          </p>
-        `;
+    function getCellFromEvent(event) {
+      const rect = elements.canvas.getBoundingClientRect();
+      let clientX, clientY;
+
+      if (event.touches && event.touches.length > 0) {
+        clientX = event.touches[0].clientX;
+        clientY = event.touches[0].clientY;
       } else {
-        elements.modalInputs.innerHTML = Object.entries(properties).map(([name, prop]) => {
-          const isRequired = required.includes(name);
-          const type = prop.type || 'string';
-          let inputType = 'text';
-          if (type === 'number' || type === 'integer') inputType = 'number';
-          if (type === 'boolean') inputType = 'checkbox';
-
-          return `
-            <div class="input-group">
-              <label class="input-label">
-                ${name}
-                ${isRequired ? '<span class="input-required">*</span>' : ''}
-              </label>
-              ${type === 'boolean' 
-                ? `<input type="checkbox" class="input-field" data-param="${name}" data-type="${type}" style="width: auto; margin-right: auto;">`
-                : `<input type="${inputType}" class="input-field" data-param="${name}" data-type="${type}" placeholder="${prop.description || ''}">`
-              }
-              ${prop.description ? `<div class="input-hint">${prop.description}</div>` : ''}
-            </div>
-          `;
-        }).join('');
+        clientX = event.clientX;
+        clientY = event.clientY;
       }
 
-      elements.modalOverlay.classList.add('active');
+      const x = Math.floor((clientX - rect.left) / CONFIG.CELL_SIZE);
+      const y = Math.floor((clientY - rect.top) / CONFIG.CELL_SIZE);
+
+      if (x >= 0 && x < CONFIG.GRID_SIZE && y >= 0 && y < CONFIG.GRID_SIZE) {
+        return { x, y };
+      }
+      return null;
     }
 
-    // Close modal
-    function closeModal() {
-      elements.modalOverlay.classList.remove('active');
-      currentTool = null;
-    }
+    async function handleCanvasTap(event) {
+      event.preventDefault();
 
-    // Run the current tool
-    async function runTool() {
-      if (!currentTool) return;
+      const cell = getCellFromEvent(event);
+      if (!cell) return;
 
-      // Collect arguments
-      const args = {};
-      elements.modalInputs.querySelectorAll('.input-field').forEach(input => {
-        const param = input.dataset.param;
-        const type = input.dataset.type;
-        let value = input.type === 'checkbox' ? input.checked : input.value;
+      const { x, y } = cell;
+      const color = state.selectedColor;
+      const nickname = state.nickname || 'Anonymous';
 
-        if (value !== '' && value !== false) {
-          if (type === 'number' || type === 'integer') {
-            value = Number(value);
-          } else if (type === 'boolean') {
-            value = Boolean(value);
-          }
-          args[param] = value;
-        }
-      });
+      // Optimistic update
+      const key = `${x},${y}`;
+      state.pixels.set(key, { x, y, color, artist: nickname, isolate_id: null });
+      drawCanvas();
 
-      elements.btnRun.disabled = true;
-      elements.btnRun.textContent = 'Running...';
+      // Don't send if already placing
+      if (state.isPlacing) return;
+
+      state.isPlacing = true;
 
       try {
-        const response = await sendRequest('tools/call', {
-          name: currentTool.name,
-          arguments: args
+        const response = await callTool('place_pixel', {
+          x,
+          y,
+          color,
+          artist: nickname,
         });
 
-        const timestamp = new Date().toLocaleTimeString();
-        
-        if (response.error) {
-          addResult({
-            toolName: currentTool.name,
-            timestamp,
-            error: response.error.message || 'Tool call failed',
-            instanceId: null
-          });
-        } else {
-          // Extract isolate ID from result to demonstrate statelessness
-          let instanceId = null;
-          let content = response.result?.content || [];
-          
-          for (const item of content) {
-            if (item.type === 'text' && item.text) {
+        if (response.result && response.result.content) {
+          for (const item of response.result.content) {
+            if (item.type === 'text') {
               try {
-                const parsed = JSON.parse(item.text);
-                // Our stateless server always includes handled_by_isolate or isolate_id
-                instanceId = parsed.handled_by_isolate || parsed.isolate_id || parsed.current_isolate || null;
+                const data = JSON.parse(item.text);
+                if (data.isolate_id || data.handled_by_isolate) {
+                  state.lastIsolateId = data.isolate_id || data.handled_by_isolate;
+                  updateIsolateDot();
+                }
+              } catch (e) {}
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to place pixel:', error);
+      } finally {
+        state.isPlacing = false;
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Polling & Canvas Sync
+    // ══════════════════════════════════════════════════════════════
+
+    async function fetchCanvas() {
+      try {
+        const response = await callTool('get_canvas', {});
+
+        if (response.result && response.result.content) {
+          for (const item of response.result.content) {
+            if (item.type === 'text') {
+              try {
+                const data = JSON.parse(item.text);
+
+                // Update pixels
+                if (data.pixels && Array.isArray(data.pixels)) {
+                  state.pixels.clear();
+                  for (const pixel of data.pixels) {
+                    const key = `${pixel.x},${pixel.y}`;
+                    state.pixels.set(key, pixel);
+                    if (pixel.isolate_id) {
+                      getIsolateColorIndex(pixel.isolate_id);
+                    }
+                  }
+                  drawCanvas();
+                }
+
+                // Update stats
+                if (typeof data.total_pixels === 'number') {
+                  state.stats.totalPixels = data.total_pixels;
+                }
+                if (typeof data.unique_artists === 'number') {
+                  state.stats.uniqueArtists = data.unique_artists;
+                }
+                if (typeof data.unique_isolates === 'number') {
+                  state.stats.uniqueIsolates = data.unique_isolates;
+                }
+
+                // Track isolate
+                if (data.isolate_id || data.handled_by_isolate) {
+                  state.lastIsolateId = data.isolate_id || data.handled_by_isolate;
+                }
+
+                updateStats();
+                updateIsolateDot();
+
               } catch (e) {
-                // Not JSON, try regex
-                const match = item.text.match(/isolate[_\s]?id[:\s]+"?([a-f0-9-]+)/i);
-                if (match) instanceId = match[1];
+                console.error('Failed to parse canvas data:', e);
               }
             }
           }
-
-          addResult({
-            toolName: currentTool.name,
-            timestamp,
-            result: content,
-            instanceId,
-            isError: response.result?.isError
-          });
         }
 
-        closeModal();
+        if (!state.connected) {
+          state.connected = true;
+          updateStatus('connected', 'Connected');
+          elements.loadingOverlay.classList.add('hidden');
+        }
 
       } catch (error) {
-        console.error('Tool call failed:', error);
-        addResult({
-          toolName: currentTool.name,
-          timestamp: new Date().toLocaleTimeString(),
-          error: error.message,
-          instanceId: null
-        });
-      } finally {
-        elements.btnRun.disabled = false;
-        elements.btnRun.textContent = 'Run Tool';
+        console.error('Failed to fetch canvas:', error);
+        updateStatus('error', 'Disconnected');
+        state.connected = false;
       }
     }
 
-    // Add a result to the results panel
-    function addResult(result) {
-      state.results.unshift(result);
-      renderResults();
-    }
-
-    // Render results
-    function renderResults() {
-      if (state.results.length === 0) {
-        elements.resultsPanel.innerHTML = `
-          <div class="results-empty">Tool call results will appear here</div>
-        `;
-        return;
-      }
-
-      elements.resultsPanel.innerHTML = state.results.map(result => {
-        let contentHtml = '';
-        
-        if (result.error) {
-          contentHtml = `<div class="result-content result-error">${escapeHtml(result.error)}</div>`;
-        } else if (result.result) {
-          const texts = result.result
-            .filter(item => item.type === 'text')
-            .map(item => item.text)
-            .join('\n');
-          
-          // Try to pretty print JSON
-          let displayText = texts;
-          try {
-            const parsed = JSON.parse(texts);
-            displayText = JSON.stringify(parsed, null, 2);
-          } catch (e) {
-            // Not JSON, use as is
-          }
-          
-          contentHtml = `<div class="result-content ${result.isError ? 'result-error' : ''}">${escapeHtml(displayText)}</div>`;
+    function startPolling() {
+      fetchCanvas();
+      state.pollTimer = setInterval(() => {
+        if (!state.isPlacing) {
+          fetchCanvas();
         }
-
-        const instanceHtml = result.instanceId 
-          ? `<div class="result-instance ${getInstanceColorClass(result.instanceId)}">
-              <span class="instance-dot"></span>
-              Isolate: ${result.instanceId.substring(0, 8)}...
-            </div>`
-          : '';
-
-        return `
-          <div class="result-card">
-            <div class="result-header">
-              <span class="result-tool-name">${escapeHtml(result.toolName)}</span>
-              <span class="result-timestamp">${result.timestamp}</span>
-            </div>
-            ${instanceHtml}
-            ${contentHtml}
-          </div>
-        `;
-      }).join('');
+      }, CONFIG.POLL_INTERVAL);
     }
 
-    // Escape HTML
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
+    function stopPolling() {
+      if (state.pollTimer) {
+        clearInterval(state.pollTimer);
+        state.pollTimer = null;
+      }
     }
 
-    // Event listeners
-    elements.connectBtn.addEventListener('click', () => {
-      if (state.connected) {
-        disconnect();
-      } else if (!state.connecting) {
-        connect();
+    // ══════════════════════════════════════════════════════════════
+    // UI Updates
+    // ══════════════════════════════════════════════════════════════
+
+    function updateStatus(status, text) {
+      elements.statusDot.className = 'status-dot ' + status;
+      elements.statusText.textContent = text;
+    }
+
+    function updateStats() {
+      elements.statPixels.textContent = state.stats.totalPixels;
+      elements.statArtists.textContent = state.stats.uniqueArtists;
+      elements.statIsolates.textContent = state.stats.uniqueIsolates;
+    }
+
+    function updateIsolateDot() {
+      if (state.lastIsolateId) {
+        const colorIndex = getIsolateColorIndex(state.lastIsolateId);
+        elements.isolateDot.className = `isolate-dot isolate-${colorIndex}`;
       }
+    }
+
+    function selectColor(color) {
+      state.selectedColor = color;
+
+      elements.colorSwatches.forEach(swatch => {
+        if (swatch.dataset.color === color) {
+          swatch.classList.add('selected');
+        } else {
+          swatch.classList.remove('selected');
+        }
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Event Listeners
+    // ══════════════════════════════════════════════════════════════
+
+    // Canvas touch/click
+    elements.canvas.addEventListener('touchstart', handleCanvasTap, { passive: false });
+    elements.canvas.addEventListener('click', handleCanvasTap);
+
+    // Color picker
+    elements.colorSwatches.forEach(swatch => {
+      swatch.addEventListener('click', () => {
+        selectColor(swatch.dataset.color);
+      });
     });
 
-    elements.serverUrl.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' && !state.connected && !state.connecting) {
-        connect();
-      }
+    // Nickname input
+    elements.nicknameInput.addEventListener('input', (e) => {
+      state.nickname = e.target.value.trim();
+      localStorage.setItem('mcp-canvas-nickname', state.nickname);
     });
 
-    elements.modalClose.addEventListener('click', closeModal);
-    elements.btnCancel.addEventListener('click', closeModal);
-    elements.btnRun.addEventListener('click', runTool);
+    // Restore nickname from localStorage
+    const savedNickname = localStorage.getItem('mcp-canvas-nickname');
+    if (savedNickname) {
+      state.nickname = savedNickname;
+      elements.nicknameInput.value = savedNickname;
+    }
 
-    elements.modalOverlay.addEventListener('click', (e) => {
-      if (e.target === elements.modalOverlay) {
-        closeModal();
-      }
+    // Window resize
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        setupCanvas();
+      }, 100);
     });
 
-    // Initialize
-    renderTools();
-    renderResults();
+    // ══════════════════════════════════════════════════════════════
+    // Initialization
+    // ══════════════════════════════════════════════════════════════
+
+    function init() {
+      updateStatus('connecting', 'Connecting...');
+      setupCanvas();
+      startPolling();
+    }
+
+    init();
   </script>
 </body>
 </html>

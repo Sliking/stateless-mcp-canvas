@@ -9,6 +9,16 @@
   // Every request is self-contained, handled by any Worker isolate.
   // No sessions, no sticky routing, no state coordination.
   // This is the point of SEP-1442: stateless MCP by default.
+  //
+  // Canvas state lives in KV (external store), not in the server.
+  // The server is stateless. The state is external.
+
+  "kv_namespaces": [
+    {
+      "binding": "CANVAS_KV",
+      "id": "79d0495cb873449f9c17d3e2747b3e97"
+    }
+  ],
 
   "observability": {
     "enabled": true
