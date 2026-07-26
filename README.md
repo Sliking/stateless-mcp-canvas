@@ -43,18 +43,28 @@ This implements the protocol-level changes from:
 
 | Tool | Description |
 |------|-------------|
-| `place_pixel` | Place a colored pixel at (x, y) with your nickname |
+| `place_pixel` | Place a colored pixel at (x, y) with your nickname. Logs history for undo/replay. |
 | `get_canvas` | Get all pixels, online users, and leaderboard |
 | `get_stats` | Total pixels, unique artists, unique isolates, top colors |
-| `clear_canvas` | Reset the canvas (requires confirmation) |
+| `clear_canvas` | Reset the canvas and history (requires confirmation) |
 | `heartbeat` | Register presence with a session ID and nickname |
+| `undo_pixel` | Undo the most recent pixel placed by a given nickname |
+| `get_history` | Get the last N placements (for time-lapse replay) |
 
 ## What you see
 
 - **Live canvas** - 32x32 pixel grid, tap to place a color. Everyone sees changes within 2 seconds.
+- **Custom colors** - predefined palette plus a rainbow swatch that opens the native color picker for any color.
 - **Online users** - green pills showing who's connected right now. Your name in orange. Updates live without refreshing.
 - **Leaderboard** - top 10 artists ranked by pixel count, with color dots showing which colors they use most.
 - **Isolate counter** - tracks how many distinct Worker isolates have handled your session's requests. Proof that stateless works across instances.
+- **Sound effects** - click/pop sounds on pixel placement (own and others). Mute button in header.
+- **Toast notifications** - brief popups when other users place pixels, showing their name and color.
+- **Undo** - revert your last pixel placement with one tap. Restores the previous color.
+- **Pinch-to-zoom** - zoom 1x-4x on mobile with two-finger pinch. Pan when zoomed. Double-tap to reset.
+- **PNG export** - download the current canvas as a high-res PNG image.
+- **Time-lapse replay** - replay the last 500 pixel placements as an animation. Stop button to cancel.
+- **Stencil overlay** - toggle a faint Cloudflare logo overlay as a drawing guide.
 
 ## Stack
 
@@ -62,6 +72,7 @@ This implements the protocol-level changes from:
 - **Frontend** - Astro (static) on Cloudflare Workers
 - **Canvas state** - Cloudflare KV (external store, not in the MCP server)
 - **Online presence** - single KV key holding all sessions as a JSON map, pruned on read (15s TTL)
+- **Placement history** - last 5000 placements stored in KV for undo and time-lapse replay
 - **No Durable Objects, no WebSockets** - the MCP server is purely stateless, presence is poll-based
 
 ## Quick start
