@@ -305,16 +305,25 @@ const handler = createMcpHandler((_ctx) => {
         if (name) onlineUsers.push(name);
       }
 
-      // Compute leaderboard from canvas pixels
-      const artistCounts: Record<string, number> = {};
+      // Compute leaderboard from canvas pixels (with colors used)
+      const artistData: Record<string, { count: number; colors: Record<string, number> }> = {};
       for (const pixel of pixelsArray) {
         const name = pixel.placed_by || "anonymous";
-        artistCounts[name] = (artistCounts[name] || 0) + 1;
+        if (!artistData[name]) artistData[name] = { count: 0, colors: {} };
+        artistData[name].count++;
+        artistData[name].colors[pixel.color] = (artistData[name].colors[pixel.color] || 0) + 1;
       }
-      const leaderboard = Object.entries(artistCounts)
-        .sort((a, b) => b[1] - a[1])
+      const leaderboard = Object.entries(artistData)
+        .sort((a, b) => b[1].count - a[1].count)
         .slice(0, 10)
-        .map(([name, count], rank) => ({ rank: rank + 1, name, pixels: count }));
+        .map(([name, data], rank) => ({
+          rank: rank + 1,
+          name,
+          pixels: data.count,
+          colors: Object.entries(data.colors)
+            .sort((a, b) => b[1] - a[1])
+            .map(([color]) => color),
+        }));
 
       const computedStats = computeCanvasStats(canvas, stats);
 

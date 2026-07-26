@@ -359,6 +359,10 @@
       font-weight: 600;
       white-space: nowrap;
     }
+    .online-name.online-me {
+      background: rgba(246, 130, 31, 0.2);
+      color: var(--accent);
+    }
 
     /* Leaderboard */
     .leaderboard-toggle {
@@ -416,6 +420,18 @@
     .leaderboard-count {
       color: var(--text-secondary);
       font-size: 12px;
+    }
+    .lb-colors {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+    }
+    .lb-color-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      border: 1px solid rgba(255,255,255,0.15);
     }
   </style>
 </head>
@@ -956,10 +972,19 @@
     // ══════════════════════════════════════════════════════════════
 
     function updateOnlineUsers() {
-      const count = state.onlineUsers.length;
+      // Always include self in the online list
+      const myName = state.nickname || 'anonymous';
+      const users = [...state.onlineUsers];
+      if (!users.includes(myName)) {
+        users.unshift(myName);
+      }
+      const count = users.length;
       elements.onlineText.textContent = `${count} online`;
-      elements.onlineNames.innerHTML = state.onlineUsers
-        .map(name => `<span class="online-name">${escapeHtml(name)}</span>`)
+      elements.onlineNames.innerHTML = users
+        .map(name => {
+          const isMe = name === myName;
+          return `<span class="online-name${isMe ? ' online-me' : ''}">${escapeHtml(name)}</span>`;
+        })
         .join('');
     }
 
@@ -973,9 +998,14 @@
           const medals = ['🥇', '🥈', '🥉'];
           const medal = medals[entry.rank - 1] || entry.rank;
           const rankClass = entry.rank === 1 ? 'gold' : entry.rank === 2 ? 'silver' : entry.rank === 3 ? 'bronze' : '';
+          const colorDots = (entry.colors || [])
+            .slice(0, 6)
+            .map(c => `<span class="lb-color-dot" style="background:${c}"></span>`)
+            .join('');
           return `<div class="leaderboard-row">
             <span class="leaderboard-rank ${rankClass}">${medal}</span>
             <span class="leaderboard-name">${escapeHtml(entry.name)}</span>
+            <span class="lb-colors">${colorDots}</span>
             <span class="leaderboard-count">${entry.pixels} px</span>
           </div>`;
         })
@@ -1007,6 +1037,8 @@
     elements.nicknameInput.addEventListener('input', (e) => {
       state.nickname = e.target.value.trim();
       localStorage.setItem('mcp-canvas-nickname', state.nickname);
+      updateOnlineUsers();
+      sendHeartbeat();
     });
 
     // Leaderboard toggle
