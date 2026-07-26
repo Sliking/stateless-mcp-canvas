@@ -550,10 +550,10 @@
       lastIsolateId: null,
       isolateColors: new Map(),
       nextIsolateColor: 0,
+      sessionIsolates: new Set(),
       stats: {
         totalPixels: 0,
         uniqueArtists: 0,
-        uniqueIsolates: 0,
       },
       onlineUsers: [],
       leaderboard: [],
@@ -801,8 +801,11 @@
               try {
                 const data = JSON.parse(item.text);
                 if (data.isolate_id || data.handled_by_isolate) {
-                  state.lastIsolateId = data.isolate_id || data.handled_by_isolate;
+                  const isoId = data.isolate_id || data.handled_by_isolate;
+                  state.lastIsolateId = isoId;
+                  state.sessionIsolates.add(isoId);
                   updateIsolateDot();
+                  updateStats();
                 }
               } catch (e) {}
             }
@@ -851,9 +854,6 @@
                 if (typeof meta.unique_artists === 'number') {
                   state.stats.uniqueArtists = meta.unique_artists;
                 }
-                if (typeof meta.unique_isolates === 'number') {
-                  state.stats.uniqueIsolates = meta.unique_isolates;
-                }
 
                 // Online users
                 if (Array.isArray(data.online_users)) {
@@ -867,9 +867,11 @@
                   updateLeaderboard();
                 }
 
-                // Track isolate
+                // Track isolate (session-level)
                 if (data.isolate_id || data.handled_by_isolate) {
-                  state.lastIsolateId = data.isolate_id || data.handled_by_isolate;
+                  const isoId = data.isolate_id || data.handled_by_isolate;
+                  state.lastIsolateId = isoId;
+                  state.sessionIsolates.add(isoId);
                 }
 
                 updateStats();
@@ -923,7 +925,7 @@
     function updateStats() {
       elements.statPixels.textContent = state.stats.totalPixels;
       elements.statArtists.textContent = state.stats.uniqueArtists;
-      elements.statIsolates.textContent = state.stats.uniqueIsolates;
+      elements.statIsolates.textContent = state.sessionIsolates.size;
     }
 
     function updateIsolateDot() {

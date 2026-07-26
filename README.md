@@ -8,7 +8,7 @@ Everyone draws on the same 32x32 canvas from their phones. Every pixel tap is a 
 
 ## How it works
 
-You tap a pixel on your phone. That tap becomes a `tools/call` request to the MCP server with the protocol version embedded in `_meta`. No initialization ceremony - just one HTTP POST. Any Worker isolate in the pool picks it up, writes the pixel to KV, and responds. The frontend polls `get_canvas` every 2 seconds to sync everyone's pixels.
+You tap a pixel on your phone. That tap becomes a `tools/call` request to the MCP server with the protocol version embedded in `_meta`. No initialization ceremony - just one HTTP POST. Any Worker isolate in the pool picks it up, writes the pixel to KV, and responds. The frontend polls `get_canvas` every 2 seconds to sync everyone's pixels. A heartbeat runs every 5 seconds to track who's online - each browser tab gets a unique session ID, so the same person on two devices shows as two online users.
 
 ```
 Phones at the event (tap to draw)
@@ -44,16 +44,25 @@ This implements the protocol-level changes from:
 | Tool | Description |
 |------|-------------|
 | `place_pixel` | Place a colored pixel at (x, y) with your nickname |
-| `get_canvas` | Get all pixels on the 32x32 canvas |
+| `get_canvas` | Get all pixels, online users, and leaderboard |
 | `get_stats` | Total pixels, unique artists, unique isolates, top colors |
 | `clear_canvas` | Reset the canvas (requires confirmation) |
+| `heartbeat` | Register presence with a session ID and nickname |
+
+## What you see
+
+- **Live canvas** - 32x32 pixel grid, tap to place a color. Everyone sees changes within 2 seconds.
+- **Online users** - green pills showing who's connected right now. Your name in orange. Updates live without refreshing.
+- **Leaderboard** - top 10 artists ranked by pixel count, with color dots showing which colors they use most.
+- **Isolate counter** - tracks how many distinct Worker isolates have handled your session's requests. Proof that stateless works across instances.
 
 ## Stack
 
 - **MCP Server** - Cloudflare Workers + `@modelcontextprotocol/server` v2 (beta) + KV
 - **Frontend** - Astro (static) on Cloudflare Workers
 - **Canvas state** - Cloudflare KV (external store, not in the MCP server)
-- **No Durable Objects** - the MCP server is purely stateless
+- **Online presence** - single KV key holding all sessions as a JSON map, pruned on read (15s TTL)
+- **No Durable Objects, no WebSockets** - the MCP server is purely stateless, presence is poll-based
 
 ## Quick start
 
