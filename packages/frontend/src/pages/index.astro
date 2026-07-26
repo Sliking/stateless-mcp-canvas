@@ -318,6 +318,105 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+    /* Online bar */
+    .online-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      overflow-x: auto;
+      flex-shrink: 0;
+      scrollbar-width: none;
+    }
+    .online-bar::-webkit-scrollbar { display: none; }
+    .online-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 6px var(--success);
+      flex-shrink: 0;
+    }
+    .online-text {
+      color: var(--text-secondary);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .online-names {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+    }
+    .online-name {
+      background: rgba(63, 185, 80, 0.15);
+      color: var(--success);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* Leaderboard */
+    .leaderboard-toggle {
+      padding: 8px 16px;
+      background: var(--card-bg);
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      cursor: pointer;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .leaderboard-panel {
+      background: var(--card-bg);
+      border-top: 1px solid var(--border);
+      max-height: 180px;
+      overflow-y: auto;
+      flex-shrink: 0;
+      transition: max-height 0.3s ease;
+    }
+    .leaderboard-panel.hidden {
+      max-height: 0;
+      overflow: hidden;
+      border-top: none;
+    }
+    .leaderboard-list {
+      padding: 8px 16px;
+    }
+    .leaderboard-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 0;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+    }
+    .leaderboard-row:last-child {
+      border-bottom: none;
+    }
+    .leaderboard-rank {
+      width: 24px;
+      text-align: center;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .leaderboard-rank.gold { color: #ffd700; }
+    .leaderboard-rank.silver { color: #c0c0c0; }
+    .leaderboard-rank.bronze { color: #cd7f32; }
+    .leaderboard-name {
+      flex: 1;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .leaderboard-count {
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -370,6 +469,13 @@
     <div class="color-swatch" data-color="#1e2430" style="background: #1e2430; border: 1px solid #30363d;"></div>
   </div>
 
+  <!-- Online Users -->
+  <div id="online-bar" class="online-bar">
+    <span class="online-dot"></span>
+    <span id="online-text" class="online-text">0 online</span>
+    <div id="online-names" class="online-names"></div>
+  </div>
+
   <!-- Stats Bar -->
   <div class="stats-bar">
     <div class="stat-item">
@@ -388,6 +494,12 @@
     <div class="stat-item">
       <div id="isolate-dot" class="isolate-dot isolate-0"></div>
     </div>
+  </div>
+
+  <!-- Leaderboard (toggleable) -->
+  <div id="leaderboard-toggle" class="leaderboard-toggle">🏆 Leaderboard</div>
+  <div id="leaderboard-panel" class="leaderboard-panel hidden">
+    <div id="leaderboard-list" class="leaderboard-list"></div>
   </div>
 
   <script>
@@ -424,6 +536,9 @@
         uniqueArtists: 0,
         uniqueIsolates: 0,
       },
+      onlineUsers: [],
+      leaderboard: [],
+      heartbeatTimer: null,
     };
 
     // ── DOM Elements ──
@@ -438,6 +553,11 @@
       statIsolates: document.getElementById('stat-isolates'),
       isolateDot: document.getElementById('isolate-dot'),
       colorSwatches: document.querySelectorAll('.color-swatch'),
+      onlineText: document.getElementById('online-text'),
+      onlineNames: document.getElementById('online-names'),
+      leaderboardToggle: document.getElementById('leaderboard-toggle'),
+      leaderboardPanel: document.getElementById('leaderboard-panel'),
+      leaderboardList: document.getElementById('leaderboard-list'),
     };
 
     const ctx = elements.canvas.getContext('2d');
@@ -716,6 +836,18 @@
                   state.stats.uniqueIsolates = meta.unique_isolates;
                 }
 
+                // Online users
+                if (Array.isArray(data.online_users)) {
+                  state.onlineUsers = data.online_users;
+                  updateOnlineUsers();
+                }
+
+                // Leaderboard
+                if (Array.isArray(data.leaderboard)) {
+                  state.leaderboard = data.leaderboard;
+                  updateLeaderboard();
+                }
+
                 // Track isolate
                 if (data.isolate_id || data.handled_by_isolate) {
                   state.lastIsolateId = data.isolate_id || data.handled_by_isolate;
@@ -795,6 +927,68 @@
     }
 
     // ══════════════════════════════════════════════════════════════
+    // Heartbeat (presence tracking via stateless MCP)
+    // ══════════════════════════════════════════════════════════════
+
+    async function sendHeartbeat() {
+      const nickname = state.nickname || 'anonymous';
+      try {
+        await callTool('heartbeat', { nickname });
+      } catch (e) {
+        // Silent fail - heartbeat is best-effort
+      }
+    }
+
+    function startHeartbeat() {
+      sendHeartbeat();
+      state.heartbeatTimer = setInterval(sendHeartbeat, 5000);
+    }
+
+    function stopHeartbeat() {
+      if (state.heartbeatTimer) {
+        clearInterval(state.heartbeatTimer);
+        state.heartbeatTimer = null;
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Online Users & Leaderboard
+    // ══════════════════════════════════════════════════════════════
+
+    function updateOnlineUsers() {
+      const count = state.onlineUsers.length;
+      elements.onlineText.textContent = `${count} online`;
+      elements.onlineNames.innerHTML = state.onlineUsers
+        .map(name => `<span class="online-name">${escapeHtml(name)}</span>`)
+        .join('');
+    }
+
+    function updateLeaderboard() {
+      if (state.leaderboard.length === 0) {
+        elements.leaderboardList.innerHTML = '<div style="color: var(--text-secondary); padding: 12px 0; text-align: center; font-size: 13px;">No pixels placed yet</div>';
+        return;
+      }
+      elements.leaderboardList.innerHTML = state.leaderboard
+        .map(entry => {
+          const medals = ['🥇', '🥈', '🥉'];
+          const medal = medals[entry.rank - 1] || entry.rank;
+          const rankClass = entry.rank === 1 ? 'gold' : entry.rank === 2 ? 'silver' : entry.rank === 3 ? 'bronze' : '';
+          return `<div class="leaderboard-row">
+            <span class="leaderboard-rank ${rankClass}">${medal}</span>
+            <span class="leaderboard-name">${escapeHtml(entry.name)}</span>
+            <span class="leaderboard-count">${entry.pixels} px</span>
+          </div>`;
+        })
+        .join('');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ══════════════════════════════════════════════════════════════
     // Event Listeners
     // ══════════════════════════════════════════════════════════════
 
@@ -813,6 +1007,14 @@
     elements.nicknameInput.addEventListener('input', (e) => {
       state.nickname = e.target.value.trim();
       localStorage.setItem('mcp-canvas-nickname', state.nickname);
+    });
+
+    // Leaderboard toggle
+    elements.leaderboardToggle.addEventListener('click', () => {
+      elements.leaderboardPanel.classList.toggle('hidden');
+      elements.leaderboardToggle.textContent = elements.leaderboardPanel.classList.contains('hidden')
+        ? '🏆 Leaderboard'
+        : '🏆 Hide Leaderboard';
     });
 
     // Restore nickname from localStorage
@@ -839,6 +1041,7 @@
       updateStatus('connecting', 'Connecting...');
       setupCanvas();
       startPolling();
+      startHeartbeat();
     }
 
     init();

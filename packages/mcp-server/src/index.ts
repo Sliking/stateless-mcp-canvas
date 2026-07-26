@@ -297,6 +297,25 @@ const handler = createMcpHandler((_ctx) => {
       // Convert pixels object to array
       const pixelsArray = Object.values(canvas.pixels);
 
+      // Get online users by listing presence keys
+      const presenceList = await env.CANVAS_KV.list({ prefix: "presence:" });
+      const onlineUsers: string[] = [];
+      for (const key of presenceList.keys) {
+        const name = key.name.replace("presence:", "");
+        if (name) onlineUsers.push(name);
+      }
+
+      // Compute leaderboard from canvas pixels
+      const artistCounts: Record<string, number> = {};
+      for (const pixel of pixelsArray) {
+        const name = pixel.placed_by || "anonymous";
+        artistCounts[name] = (artistCounts[name] || 0) + 1;
+      }
+      const leaderboard = Object.entries(artistCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([name, count], rank) => ({ rank: rank + 1, name, pixels: count }));
+
       const computedStats = computeCanvasStats(canvas, stats);
 
       return {
@@ -317,6 +336,8 @@ const handler = createMcpHandler((_ctx) => {
                   unique_artists: computedStats.unique_artists_count,
                   fill_percentage: computedStats.fill_percentage,
                 },
+                online_users: onlineUsers,
+                leaderboard: leaderboard,
                 handled_by_isolate: isolateId,
                 request_number: thisRequestNum,
               },
@@ -470,6 +491,38 @@ const handler = createMcpHandler((_ctx) => {
     }
   );
 
+  // ── Tool 5: heartbeat ───────────────────────────────────────────
+  // Registers presence with TTL for online user tracking.
+  server.registerTool(
+    "heartbeat",
+    {
+      title: "Heartbeat",
+      description: "Send a heartbeat to register your presence on the canvas. Called automatically by the frontend.",
+      inputSchema: z.object({
+        nickname: z.string().max(32).describe("Your nickname"),
+      }),
+    },
+    async ({ nickname }) => {
+      const isolateId = getIsolateId();
+      // Store presence with 15 second TTL
+      await env.CANVAS_KV.put(
+        `presence:${nickname}`,
+        JSON.stringify({ nickname, last_seen: new Date().toISOString(), isolate_id: isolateId }),
+        { expirationTtl: 15 }
+      );
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            ok: true,
+            handled_by_isolate: isolateId,
+          }),
+        }],
+      };
+    }
+  );
+
   return server;
 });
 
@@ -512,6 +565,9 @@ export default {
       const stats = await getStats(env.CANVAS_KV);
       const computedStats = computeCanvasStats(canvas, stats);
 
+      // Get online user count
+      const presenceList = await env.CANVAS_KV.list({ prefix: "presence:" });
+
       return new Response(
         JSON.stringify(
           {
@@ -532,7 +588,8 @@ export default {
               unique_isolates: computedStats.unique_isolates_count,
               most_popular_colors: computedStats.most_used_colors.slice(0, 5),
             },
-            tools: ["place_pixel", "get_canvas", "get_stats", "clear_canvas"],
+            online_users: presenceList.keys.length,
+            tools: ["place_pixel", "get_canvas", "get_stats", "clear_canvas", "heartbeat"],
           },
           null,
           2
