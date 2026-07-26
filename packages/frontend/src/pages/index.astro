@@ -535,6 +535,9 @@
 
     const CLIENT_INFO = { name: 'stateless-mcp-canvas', version: '1.0.0' };
 
+    // Unique session ID per tab - survives page reload within same tab
+    const SESSION_ID = crypto.randomUUID();
+
     // ── Application State ──
     const state = {
       connected: false,
@@ -949,7 +952,7 @@
     async function sendHeartbeat() {
       const nickname = state.nickname || 'anonymous';
       try {
-        await callTool('heartbeat', { nickname });
+        await callTool('heartbeat', { nickname, session_id: SESSION_ID });
       } catch (e) {
         // Silent fail - heartbeat is best-effort
       }

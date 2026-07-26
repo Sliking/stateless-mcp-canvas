@@ -51,9 +51,21 @@ interface CanvasStats {
   color_counts: Record<string, number>;
 }
 
+// Presence session tracking - single KV key holds all sessions
+interface PresenceSession {
+  nickname: string;
+  last_seen: number; // epoch ms for easy comparison
+  isolate_id: string;
+}
+
+type PresenceMap = Record<string, PresenceSession>; // keyed by session_id
+
+const PRESENCE_STALE_MS = 15_000; // 15 seconds
+
 // KV keys
 const CANVAS_KEY = "canvas:current";
 const STATS_KEY = "canvas:stats";
+const PRESENCE_KEY = "presence:sessions";
 
 // Canvas dimensions
 const CANVAS_WIDTH = 32;
@@ -137,6 +149,30 @@ async function updateStats(
   stats.color_counts[color] = (stats.color_counts[color] || 0) + 1;
 
   await saveStats(kv, stats);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Presence helpers - single KV key with all sessions
+// ──────────────────────────────────────────────────────────────────────
+async function getPresence(kv: KVNamespace): Promise<PresenceMap> {
+  const data = await kv.get(PRESENCE_KEY, "json");
+  return (data as PresenceMap) || {};
+}
+
+function prunePresence(sessions: PresenceMap): PresenceMap {
+  const now = Date.now();
+  const pruned: PresenceMap = {};
+  for (const [id, session] of Object.entries(sessions)) {
+    if (now - session.last_seen < PRESENCE_STALE_MS) {
+      pruned[id] = session;
+    }
+  }
+  return pruned;
+}
+
+function getOnlineNames(sessions: PresenceMap): string[] {
+  // Each session is a separate online entry, but show nicknames
+  return Object.values(sessions).map(s => s.nickname);
 }
 
 function computeCanvasStats(canvas: Canvas, stats: CanvasStats): {
@@ -297,13 +333,9 @@ const handler = createMcpHandler((_ctx) => {
       // Convert pixels object to array
       const pixelsArray = Object.values(canvas.pixels);
 
-      // Get online users by listing presence keys
-      const presenceList = await env.CANVAS_KV.list({ prefix: "presence:" });
-      const onlineUsers: string[] = [];
-      for (const key of presenceList.keys) {
-        const name = key.name.replace("presence:", "");
-        if (name) onlineUsers.push(name);
-      }
+      // Get online users from sessions map
+      const sessions = prunePresence(await getPresence(env.CANVAS_KV));
+      const onlineUsers = getOnlineNames(sessions);
 
       // Compute leaderboard from canvas pixels (with colors used)
       const artistData: Record<string, { count: number; colors: Record<string, number> }> = {};
@@ -500,37 +532,43 @@ const handler = createMcpHandler((_ctx) => {
     }
   );
 
-  // ── Tool 5: heartbeat ───────────────────────────────────────────
-  // Registers presence with TTL for online user tracking.
-  server.registerTool(
-    "heartbeat",
-    {
-      title: "Heartbeat",
-      description: "Send a heartbeat to register your presence on the canvas. Called automatically by the frontend.",
-      inputSchema: z.object({
-        nickname: z.string().max(32).describe("Your nickname"),
-      }),
-    },
-    async ({ nickname }) => {
-      const isolateId = getIsolateId();
-      // Store presence with 15 second TTL
-      await env.CANVAS_KV.put(
-        `presence:${nickname}`,
-        JSON.stringify({ nickname, last_seen: new Date().toISOString(), isolate_id: isolateId }),
-        { expirationTtl: 15 }
-      );
+   // ── Tool 5: heartbeat ───────────────────────────────────────────
+   // Registers presence using a single KV key with all sessions.
+   // Each tab/device gets a unique session_id so they count separately.
+   server.registerTool(
+     "heartbeat",
+     {
+       title: "Heartbeat",
+       description: "Send a heartbeat to register your presence on the canvas. Called automatically by the frontend.",
+       inputSchema: z.object({
+         nickname: z.string().max(32).describe("Your nickname"),
+         session_id: z.string().max(64).describe("Unique session ID per browser tab"),
+       }),
+     },
+     async ({ nickname, session_id }) => {
+       const isolateId = getIsolateId();
 
-      return {
-        content: [{
-          type: "text" as const,
-          text: JSON.stringify({
-            ok: true,
-            handled_by_isolate: isolateId,
-          }),
-        }],
-      };
-    }
-  );
+       // Read current sessions, prune stale, upsert self, write back
+       const sessions = prunePresence(await getPresence(env.CANVAS_KV));
+       sessions[session_id] = {
+         nickname,
+         last_seen: Date.now(),
+         isolate_id: isolateId,
+       };
+       await env.CANVAS_KV.put(PRESENCE_KEY, JSON.stringify(sessions));
+
+       return {
+         content: [{
+           type: "text" as const,
+           text: JSON.stringify({
+             ok: true,
+             online_count: Object.keys(sessions).length,
+             handled_by_isolate: isolateId,
+           }),
+         }],
+       };
+     }
+   );
 
   return server;
 });
@@ -574,8 +612,8 @@ export default {
       const stats = await getStats(env.CANVAS_KV);
       const computedStats = computeCanvasStats(canvas, stats);
 
-      // Get online user count
-      const presenceList = await env.CANVAS_KV.list({ prefix: "presence:" });
+      // Get online user count from sessions map
+      const sessions = prunePresence(await getPresence(env.CANVAS_KV));
 
       return new Response(
         JSON.stringify(
@@ -597,7 +635,7 @@ export default {
               unique_isolates: computedStats.unique_isolates_count,
               most_popular_colors: computedStats.most_used_colors.slice(0, 5),
             },
-            online_users: presenceList.keys.length,
+            online_users: Object.keys(sessions).length,
             tools: ["place_pixel", "get_canvas", "get_stats", "clear_canvas", "heartbeat"],
           },
           null,
