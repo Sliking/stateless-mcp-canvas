@@ -60,12 +60,25 @@ interface PresenceSession {
 
 type PresenceMap = Record<string, PresenceSession>; // keyed by session_id
 
+// History entry for undo support
+interface HistoryEntry {
+  x: number;
+  y: number;
+  color: string;
+  placed_by: string;
+  isolate_id: string;
+  timestamp: string;
+  previous_color: string | null;
+}
+
 const PRESENCE_STALE_MS = 15_000; // 15 seconds
+const HISTORY_MAX_ENTRIES = 5000;
 
 // KV keys
 const CANVAS_KEY = "canvas:current";
 const STATS_KEY = "canvas:stats";
 const PRESENCE_KEY = "presence:sessions";
+const HISTORY_KEY = "canvas:history";
 
 // Canvas dimensions
 const CANVAS_WIDTH = 32;
@@ -149,6 +162,40 @@ async function updateStats(
   stats.color_counts[color] = (stats.color_counts[color] || 0) + 1;
 
   await saveStats(kv, stats);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// History helpers - timelapse and undo support
+// ──────────────────────────────────────────────────────────────────────
+async function getHistory(kv: KVNamespace): Promise<HistoryEntry[]> {
+  const data = await kv.get(HISTORY_KEY, "json");
+  return (data as HistoryEntry[]) || [];
+}
+
+async function appendHistory(
+  kv: KVNamespace,
+  entry: HistoryEntry
+): Promise<void> {
+  const history = await getHistory(kv);
+  history.push(entry);
+
+  // Trim to max entries (remove oldest)
+  while (history.length > HISTORY_MAX_ENTRIES) {
+    history.shift();
+  }
+
+  await kv.put(HISTORY_KEY, JSON.stringify(history));
+}
+
+async function saveHistory(
+  kv: KVNamespace,
+  history: HistoryEntry[]
+): Promise<void> {
+  await kv.put(HISTORY_KEY, JSON.stringify(history));
+}
+
+async function clearHistory(kv: KVNamespace): Promise<void> {
+  await kv.put(HISTORY_KEY, JSON.stringify([]));
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -261,6 +308,11 @@ const handler = createMcpHandler((_ctx) => {
       // Read current canvas
       const canvas = await getCanvas(env.CANVAS_KV);
 
+      // Capture previous color before overwriting (for undo support)
+      const key = `${x},${y}`;
+      const existingPixel = canvas.pixels[key];
+      const previousColor = existingPixel ? existingPixel.color : null;
+
       // Create the pixel
       const pixel: Pixel = {
         x,
@@ -272,12 +324,23 @@ const handler = createMcpHandler((_ctx) => {
       };
 
       // Update canvas
-      const key = `${x},${y}`;
       canvas.pixels[key] = pixel;
 
       // Save canvas and update stats
       await saveCanvas(env.CANVAS_KV, canvas);
       await updateStats(env.CANVAS_KV, artist, color.toLowerCase(), isolateId);
+
+      // Append to history for timelapse/undo
+      const historyEntry: HistoryEntry = {
+        x,
+        y,
+        color: color.toLowerCase(),
+        placed_by: artist,
+        isolate_id: isolateId,
+        timestamp,
+        previous_color: previousColor,
+      };
+      await appendHistory(env.CANVAS_KV, historyEntry);
 
       const totalPixels = Object.keys(canvas.pixels).length;
 
@@ -506,6 +569,11 @@ const handler = createMcpHandler((_ctx) => {
       await saveCanvas(env.CANVAS_KV, newCanvas);
       await saveStats(env.CANVAS_KV, newStats);
 
+      // Also clear history
+      const oldHistory = await getHistory(env.CANVAS_KV);
+      const oldHistoryCount = oldHistory.length;
+      await clearHistory(env.CANVAS_KV);
+
       return {
         content: [
           {
@@ -518,6 +586,7 @@ const handler = createMcpHandler((_ctx) => {
                   pixels_removed: oldPixelCount,
                   artists_reset: oldStats.unique_artists.length,
                   total_placements_before: oldStats.total_pixels_placed,
+                  history_entries_cleared: oldHistoryCount,
                 },
                 cleared_at: now,
                 handled_by_isolate: isolateId,
@@ -569,6 +638,173 @@ const handler = createMcpHandler((_ctx) => {
        };
      }
    );
+
+  // ── Tool 6: get_history ─────────────────────────────────────────
+  // Returns recent placement history for timelapse playback.
+  server.registerTool(
+    "get_history",
+    {
+      title: "Get History",
+      description:
+        "Returns the most recent pixel placements in reverse chronological order. " +
+        "Useful for timelapse playback or reviewing recent activity.",
+      inputSchema: z.object({
+        count: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .optional()
+          .describe("Number of entries to return (default 100, max 500)"),
+      }),
+    },
+    async ({ count }) => {
+      const isolateId = getIsolateId();
+      const limit = count ?? 100;
+
+      const history = await getHistory(env.CANVAS_KV);
+
+      // Return in reverse chronological order (most recent first)
+      const entries = history.slice(-limit).reverse();
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(
+              {
+                history: entries,
+                returned_count: entries.length,
+                total_history_count: history.length,
+                handled_by_isolate: isolateId,
+                request_number: thisRequestNum,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
+
+  // ── Tool 7: undo_pixel ──────────────────────────────────────────
+  // Undoes the most recent placement by a given nickname.
+  server.registerTool(
+    "undo_pixel",
+    {
+      title: "Undo Pixel",
+      description:
+        "Undoes the most recent pixel placement by the specified nickname. " +
+        "Restores the previous color at that position (or removes the pixel if it was empty).",
+      inputSchema: z.object({
+        nickname: z
+          .string()
+          .max(32)
+          .describe("The nickname whose most recent placement to undo"),
+      }),
+    },
+    async ({ nickname }) => {
+      const isolateId = getIsolateId();
+
+      // Get current history
+      const history = await getHistory(env.CANVAS_KV);
+
+      // Find the most recent entry by this nickname (search from end)
+      let targetIndex = -1;
+      for (let i = history.length - 1; i >= 0; i--) {
+        if (history[i].placed_by === nickname) {
+          targetIndex = i;
+          break;
+        }
+      }
+
+      if (targetIndex === -1) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  success: false,
+                  error: `No history found for nickname "${nickname}"`,
+                  handled_by_isolate: isolateId,
+                  request_number: thisRequestNum,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      const entry = history[targetIndex];
+      const { x, y, color, previous_color, timestamp } = entry;
+
+      // Get current canvas
+      const canvas = await getCanvas(env.CANVAS_KV);
+      const key = `${x},${y}`;
+
+      // Restore previous state
+      if (previous_color === null) {
+        // Remove the pixel entirely
+        delete canvas.pixels[key];
+      } else {
+        // Restore to previous color (keep original metadata but update color)
+        if (canvas.pixels[key]) {
+          canvas.pixels[key].color = previous_color;
+          canvas.pixels[key].timestamp = new Date().toISOString();
+        } else {
+          // Pixel was removed somehow, recreate it with previous color
+          canvas.pixels[key] = {
+            x,
+            y,
+            color: previous_color,
+            placed_by: "undo",
+            isolate_id: isolateId,
+            timestamp: new Date().toISOString(),
+          };
+        }
+      }
+
+      // Save canvas
+      await saveCanvas(env.CANVAS_KV, canvas);
+
+      // Remove the history entry
+      history.splice(targetIndex, 1);
+      await saveHistory(env.CANVAS_KV, history);
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(
+              {
+                success: true,
+                undone: {
+                  x,
+                  y,
+                  color_removed: color,
+                  color_restored: previous_color,
+                  original_timestamp: timestamp,
+                  placed_by: nickname,
+                },
+                message:
+                  previous_color === null
+                    ? `Removed pixel at (${x}, ${y})`
+                    : `Restored pixel at (${x}, ${y}) to ${previous_color}`,
+                handled_by_isolate: isolateId,
+                request_number: thisRequestNum,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
 
   return server;
 });
@@ -636,7 +872,7 @@ export default {
               most_popular_colors: computedStats.most_used_colors.slice(0, 5),
             },
             online_users: Object.keys(sessions).length,
-            tools: ["place_pixel", "get_canvas", "get_stats", "clear_canvas", "heartbeat"],
+            tools: ["place_pixel", "get_canvas", "get_stats", "clear_canvas", "heartbeat", "get_history", "undo_pixel"],
           },
           null,
           2

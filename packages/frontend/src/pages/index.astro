@@ -433,6 +433,177 @@
       display: inline-block;
       border: 1px solid rgba(255,255,255,0.15);
     }
+
+    /* Custom Color Picker */
+    .color-swatch.custom-color {
+      background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
+      position: relative;
+    }
+    .color-swatch.custom-color.has-color {
+      background: var(--custom-bg);
+    }
+    #custom-color-input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      pointer-events: none;
+    }
+
+    /* Mute Button */
+    .mute-btn {
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    .mute-btn:hover {
+      background: var(--border);
+    }
+
+    /* Undo Button */
+    .undo-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .undo-btn:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+    .undo-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Toast Notifications */
+    .toast-container {
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      background: rgba(22, 27, 34, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text);
+      animation: toast-slide-in 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .toast.removing {
+      animation: toast-slide-out 0.2s ease forwards;
+    }
+    .toast-color-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    @keyframes toast-slide-in {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes toast-slide-out {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(-10px); }
+    }
+
+    /* Canvas Zoom Container */
+    .canvas-zoom-wrapper {
+      overflow: hidden;
+      touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+    }
+    .canvas-transform-layer {
+      transform-origin: center center;
+      transition: transform 0.1s ease-out;
+    }
+
+    /* Export & Replay Buttons */
+    .action-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 13px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .action-btn:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+    .action-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .action-btn.success {
+      border-color: var(--success);
+      color: var(--success);
+    }
+    .stats-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    /* Replay Progress */
+    .replay-progress {
+      font-size: 11px;
+      color: var(--accent);
+    }
+
+    /* Template Toggle */
+    .template-btn {
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: background 0.2s;
+      opacity: 0.6;
+    }
+    .template-btn:hover {
+      background: var(--border);
+    }
+    .template-btn.active {
+      opacity: 1;
+      background: rgba(246, 130, 31, 0.2);
+    }
+
+    /* Header controls group */
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
   </style>
 </head>
 <body>
@@ -441,15 +612,22 @@
     <div class="loading-spinner"></div>
   </div>
 
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
   <!-- Header -->
   <header class="header">
     <div class="header-title">
       <div class="accent-bar"></div>
       <h1>Stateless MCP Canvas</h1>
     </div>
-    <div class="status-indicator">
-      <div id="status-dot" class="status-dot"></div>
-      <span id="status-text">Connecting...</span>
+    <div class="header-controls">
+      <button id="template-btn" class="template-btn" title="Toggle stencil overlay">📐</button>
+      <button id="mute-btn" class="mute-btn" title="Toggle sound">🔊</button>
+      <div class="status-indicator">
+        <div id="status-dot" class="status-dot"></div>
+        <span id="status-text">Connecting...</span>
+      </div>
     </div>
   </header>
 
@@ -463,11 +641,16 @@
       placeholder="Anonymous"
       maxlength="20"
     />
+    <button id="undo-btn" class="undo-btn">↩ Undo</button>
   </div>
 
   <!-- Canvas Container -->
   <div class="canvas-container">
-    <canvas id="pixel-canvas"></canvas>
+    <div id="canvas-zoom-wrapper" class="canvas-zoom-wrapper">
+      <div id="canvas-transform-layer" class="canvas-transform-layer">
+        <canvas id="pixel-canvas"></canvas>
+      </div>
+    </div>
   </div>
 
   <!-- Color Picker -->
@@ -483,6 +666,8 @@
     <div class="color-swatch" data-color="#ffffff" style="background: #ffffff;"></div>
     <div class="color-swatch" data-color="#888888" style="background: #888888;"></div>
     <div class="color-swatch" data-color="#1e2430" style="background: #1e2430; border: 1px solid #30363d;"></div>
+    <div id="custom-color-swatch" class="color-swatch custom-color" data-color="" title="Custom color"></div>
+    <input type="color" id="custom-color-input" value="#ff00ff" />
   </div>
 
   <!-- Online Users -->
@@ -509,6 +694,11 @@
     </div>
     <div class="stat-item">
       <div id="isolate-dot" class="isolate-dot isolate-0"></div>
+    </div>
+    <div class="stats-actions">
+      <button id="export-btn" class="action-btn" title="Export as PNG">📷</button>
+      <button id="replay-btn" class="action-btn" title="Replay history">▶ Replay</button>
+      <span id="replay-progress" class="replay-progress"></span>
     </div>
   </div>
 
@@ -558,7 +748,29 @@
       onlineUsers: [],
       leaderboard: [],
       heartbeatTimer: null,
+      // New state for features
+      customColor: null,
+      muted: localStorage.getItem('mcp-canvas-muted') === 'true',
+      lastKnownPixels: new Map(), // For detecting new pixels from others
+      toasts: [],
+      zoom: { scale: 1, offsetX: 0, offsetY: 0 },
+      isReplayActive: false,
+      templateActive: false,
     };
+
+    // Cloudflare stencil pattern (offset 8,8 in a 32x32 grid)
+    const CF_STENCIL = [
+      [12,9],[13,9],[14,9],[15,9],[16,9],[17,9],[18,9],[19,9],
+      [11,10],[12,10],[13,10],[14,10],[15,10],[16,10],[17,10],[18,10],[19,10],[20,10],
+      [10,11],[11,11],[12,11],[13,11],[14,11],[15,11],[16,11],[17,11],[18,11],[19,11],[20,11],[21,11],
+      [10,12],[11,12],[12,12],[13,12],[14,12],[15,12],[16,12],[17,12],[18,12],[19,12],[20,12],[21,12],
+      [9,13],[10,13],[11,13],[12,13],[13,13],[14,13],[15,13],[16,13],[17,13],[18,13],[19,13],[20,13],[21,13],[22,13],
+      [9,14],[10,14],[11,14],[12,14],[13,14],[14,14],[15,14],[16,14],[17,14],[18,14],[19,14],[20,14],[21,14],[22,14],
+      [10,15],[11,15],[12,15],[13,15],[14,15],[15,15],[16,15],[17,15],[18,15],[19,15],[20,15],[21,15],
+      [10,16],[11,16],[12,16],[13,16],[14,16],[15,16],[16,16],[17,16],[18,16],[19,16],[20,16],[21,16],
+      [11,17],[12,17],[13,17],[14,17],[15,17],[16,17],[17,17],[18,17],[19,17],[20,17],
+      [12,18],[13,18],[14,18],[15,18],[16,18],[17,18],[18,18],[19,18],
+    ];
 
     // ── DOM Elements ──
     const elements = {
@@ -571,15 +783,88 @@
       statArtists: document.getElementById('stat-artists'),
       statIsolates: document.getElementById('stat-isolates'),
       isolateDot: document.getElementById('isolate-dot'),
-      colorSwatches: document.querySelectorAll('.color-swatch'),
+      colorSwatches: document.querySelectorAll('.color-swatch:not(.custom-color)'),
       onlineText: document.getElementById('online-text'),
       onlineNames: document.getElementById('online-names'),
       leaderboardToggle: document.getElementById('leaderboard-toggle'),
       leaderboardPanel: document.getElementById('leaderboard-panel'),
       leaderboardList: document.getElementById('leaderboard-list'),
+      // New elements
+      customColorSwatch: document.getElementById('custom-color-swatch'),
+      customColorInput: document.getElementById('custom-color-input'),
+      muteBtn: document.getElementById('mute-btn'),
+      undoBtn: document.getElementById('undo-btn'),
+      toastContainer: document.getElementById('toast-container'),
+      canvasZoomWrapper: document.getElementById('canvas-zoom-wrapper'),
+      canvasTransformLayer: document.getElementById('canvas-transform-layer'),
+      exportBtn: document.getElementById('export-btn'),
+      replayBtn: document.getElementById('replay-btn'),
+      replayProgress: document.getElementById('replay-progress'),
+      templateBtn: document.getElementById('template-btn'),
     };
 
     const ctx = elements.canvas.getContext('2d');
+
+    // ══════════════════════════════════════════════════════════════
+    // Sound Effects (Web Audio API)
+    // ══════════════════════════════════════════════════════════════
+
+    let audioCtx = null;
+
+    function getAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      return audioCtx;
+    }
+
+    function playOwnPixelSound() {
+      if (state.muted) return;
+      try {
+        const ctx = getAudioContext();
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(880, ctx.currentTime); // High pitch
+        gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+        
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + 0.05);
+      } catch (e) {
+        // Silent fail if audio context fails
+      }
+    }
+
+    function playOtherPixelSound() {
+      if (state.muted) return;
+      try {
+        const ctx = getAudioContext();
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(440, ctx.currentTime); // Lower pitch
+        gainNode.gain.setValueAtTime(0.05, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.03);
+        
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + 0.03);
+      } catch (e) {
+        // Silent fail
+      }
+    }
+
+    function updateMuteButton() {
+      elements.muteBtn.textContent = state.muted ? '🔇' : '🔊';
+    }
 
     // ══════════════════════════════════════════════════════════════
     // MCP Client (Stateless Protocol 2026-07-28)
@@ -687,6 +972,18 @@
       ctx.fillStyle = '#0d1117';
       ctx.fillRect(0, 0, size, size);
 
+      // Draw stencil overlay first (underneath pixels)
+      if (state.templateActive) {
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = '#f6821f';
+        for (const [x, y] of CF_STENCIL) {
+          const px = x * cellSize;
+          const py = y * cellSize;
+          ctx.fillRect(px + 1, py + 1, cellSize - 2, cellSize - 2);
+        }
+        ctx.globalAlpha = 1.0;
+      }
+
       // Draw grid lines
       ctx.strokeStyle = '#1e2430';
       ctx.lineWidth = 1;
@@ -758,8 +1055,17 @@
         clientY = event.clientY;
       }
 
-      const x = Math.floor((clientX - rect.left) / CONFIG.CELL_SIZE);
-      const y = Math.floor((clientY - rect.top) / CONFIG.CELL_SIZE);
+      // Account for zoom transform
+      const { scale, offsetX, offsetY } = state.zoom;
+      
+      // Get position relative to the canvas element (which is inside the transform layer)
+      const canvasX = clientX - rect.left;
+      const canvasY = clientY - rect.top;
+
+      // The canvas rect already accounts for the transform, but we need to
+      // convert from visual (scaled) coordinates to actual canvas coordinates
+      const x = Math.floor(canvasX / CONFIG.CELL_SIZE);
+      const y = Math.floor(canvasY / CONFIG.CELL_SIZE);
 
       if (x >= 0 && x < CONFIG.GRID_SIZE && y >= 0 && y < CONFIG.GRID_SIZE) {
         return { x, y };
@@ -770,6 +1076,9 @@
     async function handleCanvasTap(event) {
       event.preventDefault();
 
+      // Block placement during replay
+      if (state.isReplayActive) return;
+
       const cell = getCellFromEvent(event);
       if (!cell) return;
 
@@ -777,9 +1086,14 @@
       const color = state.selectedColor;
       const nickname = state.nickname || 'Anonymous';
 
+      // Play own pixel sound
+      playOwnPixelSound();
+
       // Optimistic update
       const key = `${x},${y}`;
       state.pixels.set(key, { x, y, color, artist: nickname, isolate_id: null });
+      // Also update lastKnownPixels to avoid false "other user" detection
+      state.lastKnownPixels.set(key, { color, artist: nickname });
       drawCanvas();
 
       // Don't send if already placing
@@ -835,6 +1149,9 @@
                 // Update pixels (server returns data.canvas.pixels)
                 const pixels = data.canvas?.pixels || data.pixels;
                 if (pixels && Array.isArray(pixels)) {
+                  const myNickname = state.nickname || 'Anonymous';
+                  const newPixelsFromOthers = [];
+
                   state.pixels.clear();
                   for (const pixel of pixels) {
                     const key = `${pixel.x},${pixel.y}`;
@@ -842,7 +1159,33 @@
                     if (pixel.isolate_id) {
                       getIsolateColorIndex(pixel.isolate_id);
                     }
+
+                    // Check if this is a new pixel from someone else
+                    const known = state.lastKnownPixels.get(key);
+                    const placedBy = pixel.placed_by || pixel.artist || 'Anonymous';
+                    if (placedBy !== myNickname) {
+                      if (!known || known.color !== pixel.color || known.artist !== placedBy) {
+                        newPixelsFromOthers.push({ ...pixel, placedBy });
+                      }
+                    }
                   }
+
+                  // Update lastKnownPixels
+                  state.lastKnownPixels.clear();
+                  for (const pixel of pixels) {
+                    const key = `${pixel.x},${pixel.y}`;
+                    state.lastKnownPixels.set(key, {
+                      color: pixel.color,
+                      artist: pixel.placed_by || pixel.artist || 'Anonymous'
+                    });
+                  }
+
+                  // Notify about new pixels from others
+                  for (const pixel of newPixelsFromOthers) {
+                    playOtherPixelSound();
+                    showToast(pixel.placedBy, pixel.color);
+                  }
+
                   drawCanvas();
                 }
 
@@ -935,16 +1278,303 @@
       }
     }
 
-    function selectColor(color) {
+    function selectColor(color, isCustom = false) {
       state.selectedColor = color;
 
+      // Deselect all swatches
       elements.colorSwatches.forEach(swatch => {
-        if (swatch.dataset.color === color) {
-          swatch.classList.add('selected');
-        } else {
-          swatch.classList.remove('selected');
-        }
+        swatch.classList.remove('selected');
       });
+      elements.customColorSwatch.classList.remove('selected');
+
+      if (isCustom) {
+        elements.customColorSwatch.classList.add('selected');
+      } else {
+        elements.colorSwatches.forEach(swatch => {
+          if (swatch.dataset.color === color) {
+            swatch.classList.add('selected');
+          }
+        });
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Toast Notifications
+    // ══════════════════════════════════════════════════════════════
+
+    function showToast(nickname, color) {
+      // Limit to 3 toasts
+      while (state.toasts.length >= 3) {
+        const oldest = state.toasts.shift();
+        if (oldest.element && oldest.element.parentNode) {
+          oldest.element.remove();
+        }
+      }
+
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.innerHTML = `
+        <span class="toast-color-dot" style="background: ${color}"></span>
+        <span>${escapeHtml(nickname)} placed a pixel</span>
+      `;
+
+      elements.toastContainer.insertBefore(toast, elements.toastContainer.firstChild);
+
+      const toastObj = { element: toast };
+      state.toasts.push(toastObj);
+
+      // Auto-dismiss after 2 seconds
+      setTimeout(() => {
+        toast.classList.add('removing');
+        setTimeout(() => {
+          if (toast.parentNode) {
+            toast.remove();
+          }
+          const idx = state.toasts.indexOf(toastObj);
+          if (idx > -1) {
+            state.toasts.splice(idx, 1);
+          }
+        }, 200);
+      }, 2000);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Undo Functionality
+    // ══════════════════════════════════════════════════════════════
+
+    async function handleUndo() {
+      elements.undoBtn.disabled = true;
+      try {
+        await callTool('undo_pixel', { nickname: state.nickname || 'Anonymous' });
+        await fetchCanvas();
+      } catch (e) {
+        console.error('Undo failed:', e);
+      } finally {
+        elements.undoBtn.disabled = false;
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Canvas Export as PNG
+    // ══════════════════════════════════════════════════════════════
+
+    function exportCanvasAsPNG() {
+      const resolution = 640;
+      const cellSize = resolution / CONFIG.GRID_SIZE;
+
+      const offscreen = document.createElement('canvas');
+      offscreen.width = resolution;
+      offscreen.height = resolution;
+      const offCtx = offscreen.getContext('2d');
+
+      // Background
+      offCtx.fillStyle = '#0d1117';
+      offCtx.fillRect(0, 0, resolution, resolution);
+
+      // Grid lines
+      offCtx.strokeStyle = '#1e2430';
+      offCtx.lineWidth = 1;
+      for (let i = 0; i <= CONFIG.GRID_SIZE; i++) {
+        const pos = i * cellSize;
+        offCtx.beginPath();
+        offCtx.moveTo(pos, 0);
+        offCtx.lineTo(pos, resolution);
+        offCtx.stroke();
+        offCtx.beginPath();
+        offCtx.moveTo(0, pos);
+        offCtx.lineTo(resolution, pos);
+        offCtx.stroke();
+      }
+
+      // Pixels
+      for (const [key, pixel] of state.pixels) {
+        const px = pixel.x * cellSize;
+        const py = pixel.y * cellSize;
+        offCtx.fillStyle = pixel.color;
+        offCtx.fillRect(px + 1, py + 1, cellSize - 2, cellSize - 2);
+      }
+
+      // Download
+      const link = document.createElement('a');
+      link.download = 'mcp-canvas.png';
+      link.href = offscreen.toDataURL('image/png');
+      link.click();
+
+      // Visual feedback
+      elements.exportBtn.textContent = '✓';
+      setTimeout(() => {
+        elements.exportBtn.textContent = '📷';
+      }, 1000);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Time-Lapse Replay
+    // ══════════════════════════════════════════════════════════════
+
+    let replayAbortController = null;
+
+    async function startReplay() {
+      if (state.isReplayActive) return;
+
+      state.isReplayActive = true;
+      elements.replayBtn.textContent = 'Stop';
+      elements.replayProgress.textContent = 'Loading...';
+      replayAbortController = { aborted: false };
+
+      try {
+        const response = await callTool('get_history', { count: 500 });
+        let history = [];
+
+        if (response.result && response.result.content) {
+          for (const item of response.result.content) {
+            if (item.type === 'text') {
+              try {
+                const data = JSON.parse(item.text);
+                history = data.history || data || [];
+              } catch (e) {}
+            }
+          }
+        }
+
+        if (!Array.isArray(history) || history.length === 0) {
+          elements.replayProgress.textContent = 'No history';
+          setTimeout(() => {
+            elements.replayProgress.textContent = '';
+          }, 1500);
+          state.isReplayActive = false;
+          elements.replayBtn.textContent = '▶ Replay';
+          return;
+        }
+
+        // Clear canvas visually
+        const savedPixels = new Map(state.pixels);
+        state.pixels.clear();
+        drawCanvas();
+
+        // Replay each pixel
+        for (let i = 0; i < history.length; i++) {
+          if (replayAbortController.aborted) break;
+
+          const pixel = history[i];
+          const key = `${pixel.x},${pixel.y}`;
+          state.pixels.set(key, pixel);
+          drawCanvas();
+          elements.replayProgress.textContent = `${i + 1}/${history.length}`;
+
+          await new Promise(r => setTimeout(r, 30));
+        }
+
+        // Restore full canvas
+        state.pixels = savedPixels;
+        drawCanvas();
+
+      } catch (e) {
+        console.error('Replay failed:', e);
+      } finally {
+        state.isReplayActive = false;
+        elements.replayBtn.textContent = '▶ Replay';
+        elements.replayProgress.textContent = '';
+        replayAbortController = null;
+      }
+    }
+
+    function stopReplay() {
+      if (replayAbortController) {
+        replayAbortController.aborted = true;
+      }
+    }
+
+    function handleReplayClick() {
+      if (state.isReplayActive) {
+        stopReplay();
+      } else {
+        startReplay();
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Pinch-to-Zoom
+    // ══════════════════════════════════════════════════════════════
+
+    let pinchState = {
+      active: false,
+      initialDistance: 0,
+      initialScale: 1,
+      lastTouchX: 0,
+      lastTouchY: 0,
+      isPanning: false,
+      lastTapTime: 0,
+    };
+
+    function getDistance(touch1, touch2) {
+      const dx = touch2.clientX - touch1.clientX;
+      const dy = touch2.clientY - touch1.clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function updateZoomTransform() {
+      const { scale, offsetX, offsetY } = state.zoom;
+      elements.canvasTransformLayer.style.transform = 
+        `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+    }
+
+    function handleZoomTouchStart(e) {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        pinchState.active = true;
+        pinchState.initialDistance = getDistance(e.touches[0], e.touches[1]);
+        pinchState.initialScale = state.zoom.scale;
+      } else if (e.touches.length === 1 && state.zoom.scale > 1) {
+        // Single finger pan when zoomed
+        pinchState.isPanning = true;
+        pinchState.lastTouchX = e.touches[0].clientX;
+        pinchState.lastTouchY = e.touches[0].clientY;
+      }
+
+      // Double-tap detection
+      const now = Date.now();
+      if (e.touches.length === 1 && now - pinchState.lastTapTime < 300) {
+        // Double tap - reset zoom
+        state.zoom = { scale: 1, offsetX: 0, offsetY: 0 };
+        updateZoomTransform();
+        pinchState.lastTapTime = 0;
+        e.preventDefault();
+        return;
+      }
+      pinchState.lastTapTime = now;
+    }
+
+    function handleZoomTouchMove(e) {
+      if (pinchState.active && e.touches.length === 2) {
+        e.preventDefault();
+        const currentDistance = getDistance(e.touches[0], e.touches[1]);
+        let newScale = pinchState.initialScale * (currentDistance / pinchState.initialDistance);
+        newScale = Math.max(1, Math.min(4, newScale));
+        state.zoom.scale = newScale;
+        updateZoomTransform();
+      } else if (pinchState.isPanning && e.touches.length === 1) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - pinchState.lastTouchX;
+        const dy = e.touches[0].clientY - pinchState.lastTouchY;
+        
+        // Limit panning based on zoom level
+        const maxOffset = (state.zoom.scale - 1) * elements.canvas.width / 2;
+        state.zoom.offsetX = Math.max(-maxOffset, Math.min(maxOffset, state.zoom.offsetX + dx));
+        state.zoom.offsetY = Math.max(-maxOffset, Math.min(maxOffset, state.zoom.offsetY + dy));
+        
+        pinchState.lastTouchX = e.touches[0].clientX;
+        pinchState.lastTouchY = e.touches[0].clientY;
+        updateZoomTransform();
+      }
+    }
+
+    function handleZoomTouchEnd(e) {
+      if (e.touches.length < 2) {
+        pinchState.active = false;
+      }
+      if (e.touches.length === 0) {
+        pinchState.isPanning = false;
+      }
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1027,15 +1657,66 @@
     // Event Listeners
     // ══════════════════════════════════════════════════════════════
 
-    // Canvas touch/click
-    elements.canvas.addEventListener('touchstart', handleCanvasTap, { passive: false });
+    // Canvas touch/click - only handle single taps for pixel placement
+    elements.canvas.addEventListener('touchstart', (e) => {
+      // Only place pixel on single tap without zoom gesture
+      if (e.touches.length === 1 && !pinchState.active && state.zoom.scale === 1) {
+        handleCanvasTap(e);
+      } else if (e.touches.length === 1 && state.zoom.scale > 1 && !pinchState.isPanning) {
+        // When zoomed, need to distinguish between pan and tap
+        // We'll handle tap on touchend if no pan occurred
+      }
+    }, { passive: false });
     elements.canvas.addEventListener('click', handleCanvasTap);
+
+    // Zoom gestures on wrapper
+    elements.canvasZoomWrapper.addEventListener('touchstart', handleZoomTouchStart, { passive: false });
+    elements.canvasZoomWrapper.addEventListener('touchmove', handleZoomTouchMove, { passive: false });
+    elements.canvasZoomWrapper.addEventListener('touchend', handleZoomTouchEnd, { passive: false });
 
     // Color picker
     elements.colorSwatches.forEach(swatch => {
       swatch.addEventListener('click', () => {
-        selectColor(swatch.dataset.color);
+        selectColor(swatch.dataset.color, false);
       });
+    });
+
+    // Custom color picker
+    elements.customColorSwatch.addEventListener('click', () => {
+      elements.customColorInput.click();
+    });
+
+    elements.customColorInput.addEventListener('input', (e) => {
+      const color = e.target.value;
+      state.customColor = color;
+      elements.customColorSwatch.style.setProperty('--custom-bg', color);
+      elements.customColorSwatch.style.background = color;
+      elements.customColorSwatch.classList.add('has-color');
+      elements.customColorSwatch.dataset.color = color;
+      selectColor(color, true);
+    });
+
+    // Mute button
+    elements.muteBtn.addEventListener('click', () => {
+      state.muted = !state.muted;
+      localStorage.setItem('mcp-canvas-muted', state.muted);
+      updateMuteButton();
+    });
+
+    // Undo button
+    elements.undoBtn.addEventListener('click', handleUndo);
+
+    // Export button
+    elements.exportBtn.addEventListener('click', exportCanvasAsPNG);
+
+    // Replay button
+    elements.replayBtn.addEventListener('click', handleReplayClick);
+
+    // Template toggle
+    elements.templateBtn.addEventListener('click', () => {
+      state.templateActive = !state.templateActive;
+      elements.templateBtn.classList.toggle('active', state.templateActive);
+      drawCanvas();
     });
 
     // Nickname input
@@ -1060,6 +1741,9 @@
       state.nickname = savedNickname;
       elements.nicknameInput.value = savedNickname;
     }
+
+    // Restore mute state
+    updateMuteButton();
 
     // Window resize
     let resizeTimer;
