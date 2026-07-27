@@ -170,23 +170,25 @@
     .color-picker {
       background: var(--card-bg);
       border-top: 1px solid var(--border);
-      padding: 14px 16px;
+      padding: 10px 16px;
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 10px;
+      gap: 8px;
       flex-shrink: 0;
-      flex-wrap: wrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
     }
+    .color-picker::-webkit-scrollbar { display: none; }
 
     .color-picker-label {
       font-size: 16px;
-      margin-right: 4px;
+      flex-shrink: 0;
     }
 
     .color-swatch {
-      width: 32px;
-      height: 32px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       border: 2px solid transparent;
       cursor: pointer;
@@ -270,12 +272,15 @@
 
       .color-picker {
         padding: 16px 24px;
-        gap: 14px;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+        overflow-x: visible;
       }
 
       .color-swatch {
-        width: 40px;
-        height: 40px;
+        width: 36px;
+        height: 36px;
       }
 
       .stats-bar {
