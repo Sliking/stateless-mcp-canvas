@@ -443,16 +443,21 @@
     .color-swatch.custom-color {
       background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
       position: relative;
+      overflow: hidden;
     }
     .color-swatch.custom-color.has-color {
       background: var(--custom-bg);
     }
     #custom-color-input {
       position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       opacity: 0;
-      width: 0;
-      height: 0;
-      pointer-events: none;
+      cursor: pointer;
+      border: none;
+      padding: 0;
     }
 
     /* Mute Button */
@@ -641,8 +646,9 @@
 
   <!-- Color Picker -->
   <div class="color-picker">
-    <div id="custom-color-swatch" class="color-swatch custom-color" data-color="" title="Custom color"></div>
-    <input type="color" id="custom-color-input" value="#ff00ff" />
+    <div id="custom-color-swatch" class="color-swatch custom-color" data-color="" title="Custom color">
+      <input type="color" id="custom-color-input" value="#ff00ff" />
+    </div>
     <div class="color-swatch selected" data-color="#f6821f" style="background: #f6821f;"></div>
     <div class="color-swatch" data-color="#ff4444" style="background: #ff4444;"></div>
     <div class="color-swatch" data-color="#44ff44" style="background: #44ff44;"></div>
@@ -1558,11 +1564,7 @@
       });
     });
 
-    // Custom color picker
-    elements.customColorSwatch.addEventListener('click', () => {
-      elements.customColorInput.click();
-    });
-
+    // Custom color picker - input is overlaid on swatch, opens natively on tap
     elements.customColorInput.addEventListener('input', (e) => {
       const color = e.target.value;
       state.customColor = color;
