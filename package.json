@@ -13,5 +13,8 @@
   "workspaces": [
     "packages/mcp-server",
     "packages/frontend"
-  ]
+  ],
+  "devDependencies": {
+    "@playwright/test": "^1.62.0"
+  }
 }
