@@ -1,0 +1,23 @@
+.gitignore
+  s_41f675809a9598::t_30958f113135c4 6
+package-lock.json
+  s_41f675809a9598::t_f260915327b91e 13-16,1651-1666,3749-3795
+package.json
+  s_41f675809a9598::t_4dd570adecc31e 16-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "48e4a2ca3bf2156e642fe86a60b6a2dac51f657f",
+  "prompts": {},
+  "sessions": {
+    "s_41f675809a9598": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_066726289ffeptS3MEcv1qvYol",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Miguel Pinto <mpinto@cloudflare.com>"
+    }
+  }
+}
