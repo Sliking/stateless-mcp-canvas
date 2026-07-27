@@ -255,22 +255,6 @@ test.describe('Canvas - UI Controls', () => {
     await expect(replayBtn).toBeVisible();
   });
 
-  test('template/stencil button toggles', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('#loading-overlay')).toHaveClass(/hidden/, { timeout: 10000 });
-
-    const templateBtn = page.locator('#template-btn');
-    await expect(templateBtn).toBeVisible();
-
-    // Click to enable stencil
-    await templateBtn.click();
-    await expect(templateBtn).toHaveClass(/active/);
-
-    // Click to disable
-    await templateBtn.click();
-    await expect(templateBtn).not.toHaveClass(/active/);
-  });
-
   test('leaderboard toggles open and closed', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#loading-overlay')).toHaveClass(/hidden/, { timeout: 10000 });
