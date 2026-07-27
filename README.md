@@ -63,7 +63,6 @@ This implements the protocol-level changes from:
 - **Undo** - revert your last pixel placement with one tap. Restores the previous color.
 - **PNG export** - download the current canvas as a high-res PNG image.
 - **Time-lapse replay** - replay the last 500 pixel placements as an animation. Stop button to cancel.
-- **Stencil overlay** - toggle a faint Cloudflare logo overlay as a drawing guide.
 
 ## Stack
 
