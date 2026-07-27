@@ -61,7 +61,6 @@ This implements the protocol-level changes from:
 - **Sound effects** - click/pop sounds on pixel placement (own and others). Mute button in header.
 - **Toast notifications** - brief popups when other users place pixels, showing their name and color.
 - **Undo** - revert your last pixel placement with one tap. Restores the previous color.
-- **Pinch-to-zoom** - zoom 1x-4x on mobile with two-finger pinch. Pan when zoomed. Double-tap to reset.
 - **PNG export** - download the current canvas as a high-res PNG image.
 - **Time-lapse replay** - replay the last 500 pixel placements as an animation. Stop button to cancel.
 - **Stencil overlay** - toggle a faint Cloudflare logo overlay as a drawing guide.
